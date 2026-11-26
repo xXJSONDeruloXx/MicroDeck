@@ -1,0 +1,83 @@
+#!/usr/bin/python3
+"""Which 1 MiB chunks of an ext4 image hold anything the filesystem uses (data, metadata, journal)? Prints "start count" lines.
+
+The updater writes only these chunks to the root partition: a block the new filesystem lists as free cannot be read by it, so
+whatever the old filesystem left there does not matter. That halves the install (the root is 3 GiB, about 1.5 GB of it used).
+Metadata is never free, so inode tables and bitmaps are always written. Any doubt (unparseable output, odd block size) prints
+the whole image, which is always correct.
+"""
+import re
+import subprocess
+import sys
+
+MIB = 1 << 20
+
+
+def parse(text):
+    """(block size, block count, merged sorted list of free (first, last) block ranges) from dumpe2fs output."""
+    bs = int(re.search(r"^Block size:\s+(\d+)", text, re.M).group(1))
+    total = int(re.search(r"^Block count:\s+(\d+)", text, re.M).group(1))
+    free = []
+    # [ ] and not \s: a full group prints an empty "Free blocks:" line, and \s would swallow the newline into the next line
+    for m in re.finditer(r"^ +Free blocks: *(.*)$", text, re.M):
+        for part in m.group(1).split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                a, b = part.split("-")
+                free.append((int(a), int(b)))
+            else:
+                free.append((int(part), int(part)))
+    free.sort()
+    merged = []
+    for a, b in free:
+        if merged and a <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+        else:
+            merged.append((a, b))
+    return bs, total, merged
+
+
+def chunks(bs, total, free, size_bytes):
+    """Chunks (1 MiB units) that contain at least one block not in `free`, as merged (start, count) runs."""
+    per = MIB // bs
+    count = (size_bytes + MIB - 1) // MIB
+    needed = []
+    j = 0
+    for c in range(count):
+        lo, hi = c * per, min((c + 1) * per, total) - 1
+        if lo > total - 1:
+            used = True  # beyond the filesystem: write it, it is cheap and keeps the partition identical
+        else:
+            while j < len(free) and free[j][1] < lo:
+                j += 1
+            used = not (j < len(free) and free[j][0] <= lo and free[j][1] >= hi)
+        if used:
+            if needed and needed[-1][0] + needed[-1][1] == c:
+                needed[-1] = (needed[-1][0], needed[-1][1] + 1)
+            else:
+                needed.append((c, 1))
+    return needed
+
+
+def main(argv):
+    image = argv[1]
+    import os
+    size = os.path.getsize(image)
+    try:
+        text = subprocess.run(["dumpe2fs", image], capture_output=True, text=True, check=True).stdout
+        bs, total, free = parse(text)
+        if bs not in (1024, 2048, 4096) or MIB % bs:
+            raise ValueError("block size %d" % bs)
+        runs = chunks(bs, total, free, size)
+    except Exception as e:  # anything unexpected: write everything
+        print("sxx-used-chunks: %s; writing the whole image" % e, file=sys.stderr)
+        runs = [(0, (size + MIB - 1) // MIB)]
+    for start, count in runs:
+        print(start, count)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

@@ -48,8 +48,8 @@ if [ -n "$boot" ] && [ -n "$data" ] && mkdir -p /mnt/data && mount -t ext4 -o rw
     if [ $t -gt 3 ] && [ -f $u/previous/root.img ] && [ -d $u/previous/boot ]; then
       show "SteamOSXX $(cat $u/installed/tag 2>/dev/null) is being replaced by $(cat $u/previous/tag)"
       cp $u/installed/tag $u/bad 2>/dev/null
-      rm -rf $u/root.img $u/boot
-      mv $u/previous/root.img $u/root.img; mv $u/previous/boot $u/boot; cp $u/previous/tag $u/pending
+      rm -rf $u/root.img $u/root.chunks $u/boot
+      mv $u/previous/root.img $u/root.img; mv $u/previous/root.chunks $u/root.chunks 2>/dev/null; mv $u/previous/boot $u/boot; cp $u/previous/tag $u/pending
       rm -rf $u/previous $u/installed; rm -f $u/trial $u/tries; sync
     fi
   fi
@@ -66,12 +66,25 @@ if [ -f $u/pending ] && [ -f $u/root.img ] && [ -d $u/boot ] && grep -q ' /mnt/d
     # the release being replaced, read before it is overwritten: only an image of that release is a valid rollback target
     oldrel=; mkdir -p /mnt/oldroot
     if mount -t ext4 -o ro,noload "$newroot" /mnt/oldroot 2>/dev/null; then oldrel=$(cat /mnt/oldroot/etc/sxx-release 2>/dev/null); umount /mnt/oldroot; fi
-    mb=$(( $(stat -c %s $u/root.img) / 1048576 )); i=0; ok=1
-    while [ $i -lt $mb ]; do
-      dd if=$u/root.img of=$newroot bs=1M skip=$i seek=$i count=64 conv=notrunc status=none 2>>"$log" || ok=0
-      i=$((i + 64))
-      echo "SteamOSXX update: $((i * 100 / mb)) %" > /dev/tty0 2>/dev/null
-    done
+    mb=$(( $(stat -c %s $u/root.img) / 1048576 )); ok=1
+    # root.chunks ("start count" in MiB) lists what the new filesystem uses; the rest of the root is free space, whatever it holds
+    if [ -s $u/root.chunks ]; then
+      chunklist=$u/root.chunks
+      mb=$(awk '{s += $2} END {print s}' $chunklist); [ "$mb" -gt 0 ] || mb=1
+    else
+      echo "0 $mb" > $u/root.chunks.all; chunklist=$u/root.chunks.all
+    fi
+    done_mb=0
+    while read -r start count; do
+      i=0
+      while [ $i -lt $count ]; do
+        n=64; [ $((count - i)) -lt 64 ] && n=$((count - i))
+        dd if=$u/root.img of=$newroot bs=1M skip=$((start + i)) seek=$((start + i)) count=$n conv=notrunc status=none 2>>"$log" || ok=0
+        i=$((i + n)); done_mb=$((done_mb + n))
+        echo "SteamOSXX update: $((done_mb * 100 / mb)) %" > /dev/tty0 2>/dev/null
+      done
+    done < $chunklist
+    rm -f $u/root.chunks.all
     sync
     if [ $ok = 1 ]; then
       ( cd $u/boot && find . -type f ) | while read -r f; do
@@ -85,7 +98,7 @@ if [ -f $u/pending ] && [ -f $u/root.img ] && [ -d $u/boot ] && grep -q ' /mnt/d
       # keep what was just installed (the rollback target of the next update) and put the release on trial
       rm -rf $u/previous
       if [ -d $u/installed ] && [ "$(cat $u/installed/tag 2>/dev/null)" = "$oldrel" ]; then mv $u/installed $u/previous; else rm -rf $u/installed; fi
-      mkdir -p $u/installed && mv $u/root.img $u/installed/root.img && mv $u/boot $u/installed/boot && cp $u/pending $u/installed/tag
+      mkdir -p $u/installed && mv $u/root.img $u/installed/root.img && { mv $u/root.chunks $u/installed/root.chunks 2>/dev/null; true; } && mv $u/boot $u/installed/boot && cp $u/pending $u/installed/tag
       echo 0 > $u/trial; rm -f $u/pending $u/tries $u/latest.json; sync
       umount /mnt/data; umount /mnt/boot; sync
       reboot -f

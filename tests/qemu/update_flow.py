@@ -20,6 +20,7 @@ echo {tag} > /mnt/r/etc/sxx-release
 echo {tag} > /mnt/r/etc/qemu-marker
 {mutation}
 umount /mnt/r
+/usr/local/sbin/sxx-used-chunks $U/root.img > $U/root.chunks
 cp -a /boot/firmware/. $U/boot/ && rm -f $U/boot/bootlog-* $U/boot/wifi.txt $U/boot/authorized_keys $U/boot/recovery.txt*
 echo {tag} > $U/pending; sync
 """

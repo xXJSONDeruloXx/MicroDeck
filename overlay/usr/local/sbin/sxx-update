@@ -69,7 +69,7 @@ apply() {
   got=$(sha256sum "$part" | awk '{print $1}')
   [ "$got" = "$want" ] || { say "checksum mismatch, discarding the download"; rm -f "$part"; return 1; }
   say "unpacking"
-  rm -rf "$STATE/root.img" "$STATE/boot" "$STATE/boot.img"
+  rm -rf "$STATE/root.img" "$STATE/root.chunks" "$STATE/boot" "$STATE/boot.img"
   # layout contract (tools/build-image.sh): 16 MiB of MBR and U-Boot, a 256 MiB boot partition, then the 3 GiB root
   xz -dc "$part" | {
     dd of=/dev/null bs=1M count=16 iflag=fullblock status=none
@@ -77,6 +77,8 @@ apply() {
     dd of="$STATE/root.img" bs=1M iflag=fullblock conv=sparse status=none
   }
   [ "$(stat -c %s "$STATE/root.img")" = 3221225472 ] || { say "unexpected image layout"; rm -f "$STATE/root.img" "$STATE/boot.img"; return 1; }
+  # the chunks of the root that hold anything the new filesystem uses: the install writes only those (sxx-used-chunks)
+  /usr/local/sbin/sxx-used-chunks "$STATE/root.img" > "$STATE/root.chunks.tmp" 2>/dev/null && mv "$STATE/root.chunks.tmp" "$STATE/root.chunks" || rm -f "$STATE/root.chunks.tmp" "$STATE/root.chunks"
   mkdir -p "$STATE/boot" /run/sxx-update-boot
   mount -o loop,ro "$STATE/boot.img" /run/sxx-update-boot && cp -a /run/sxx-update-boot/. "$STATE/boot/"
   umount /run/sxx-update-boot; rmdir /run/sxx-update-boot
