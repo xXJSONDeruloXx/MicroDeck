@@ -71,6 +71,7 @@ while :; do
   # Steam re-extracts the whole client when its post-crash checksum pass finds the patched steamwebhelper.sh, so
   # start it stock and patch once the updater has finished verifying, before the client launches the web helper.
   /usr/local/bin/patch-webhelper.py --restore >>"$log" 2>&1
+  /usr/local/bin/sxx-compat-default --seed >>"$log" 2>&1
   bootstrap=$root/logs/bootstrap_log.txt
   offset=$(stat -c %s "$bootstrap" 2>/dev/null || echo 0)
   ( tail -c +$((offset + 1)) -F "$bootstrap" 2>/dev/null | grep -a --line-buffered -E 'Verification complete|Update complete, launching' |
