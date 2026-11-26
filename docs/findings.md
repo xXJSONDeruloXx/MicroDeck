@@ -447,3 +447,14 @@ on another computer, so game runs need the account free.
 - Steam side, not ours: with the account shared by several devices, a launch can stall at "Synchronizing cloud" or
   "SynchronizingControllerConfig" (cloud sync failing, "Roaming Config ... Failure"), and Steam ends a running game when another
   device starts one. Steam's offline mode (`SteamClient.User.GoOffline()`) avoids both for testing.
+
+### The QEMU virtual device (2026-11-26)
+- `tools/vm.sh` boots our real initramfs and image on a generic arm64 kernel (kernel.org 7.2 defconfig plus virtio, ext4 and FAT built
+  in; `tools/qemu/build-kernel.sh`), with a stable SSH, serial log, display and monitor. CI boots every image the same way
+  (`vm-boot` job, `tools/qemu/ci.sh`). The device-only units are masked in the VM (wifi-kick, zram, usb-gadget, reach-guard).
+- Bugs it found that the handheld could not show: `firstboot` built the data partition path as `<disk>p3` (wrong for `vda`), and
+  `sxx-ssh-import` skipped re-importing keys whenever its stored checksum matched, even if the installed key file was empty (a root
+  copied from a live filesystem). Also `reach-guard` reboots a VM that has no network after five minutes.
+- Passing: staged update install with trial (`tools/vm.sh test updater 1`), a release that does not boot is rolled back after three
+  boots with the failed tag recorded (2), `recovery.txt` with `sxx=previous` returns to the kept release (3). Not testable there:
+  anything that needs the H700, the Mali, Steam's UI, the pad, Wi-Fi or sleep.
