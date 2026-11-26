@@ -168,6 +168,34 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [ ] Release images on GitHub with an install guide (flash, first boot, recovery).
 - [ ] Other H700 devices (RG35XX family, RG40XX-V): DTB and DRAM per device.
 
+## Ideas from Handtop (junsulee119/handtop, reviewed 2026-11-26)
+Handtop is a Debian desktop (labwc, no Steam) for the sibling RG35XX-H: same H700, ROCKNIX kernel/DTBs unchanged, Debian
+trixie userspace. No gaming stack, but several transferable parts:
+- [x] `recovery.txt` on the boot partition with `sxx=previous` forces the previous release at the next boot (done; the
+      initramfs reads it, renames it to `.used`).
+- [x] The updater refuses below 40 % battery without the charger (done in `sxx-update apply`).
+- [ ] **Sleep with s2idle** instead of waiting for TF-A suspend: the kernel already offers `s2idle` (default `mem_sleep`).
+      First test 2026-11-26: the suspend was refused by `vhci_hcd` ("1 active connection", the virtual Deck controller), so
+      InputPlumber must be stopped (or its USB/IP port detached) before and started after; then a wake source: the sun6i RTC
+      is `/dev/rtc1` (`/dev/rtc0` is an I2C RTC without wakeup) and holds 1970, so set it from system time first
+      (`hwclock` is not installed). A test with the virtual pad stopped left the device unreachable (the wake did not fire):
+      find a wake that works (power key `axp20x-pek`, RTC alarm) before any release. Handtop reports ~5-6 %/hour in s2idle. M
+- [ ] Battery saver: cap the CPU at 1.0 GHz and dim the screen on low battery; clean shutdown at 5 % (Handtop's policy). S
+- [ ] Rumble: Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
+      atomic context but takes a mutex the PWM work item holds; freezes the whole handheld) and patches it
+      (`build/kernel/rocknix-joypad/0001-rumble-no-mutex-in-atomic-context.patch`). We build the same driver
+      (`kernel/build.sh`, hackbar/rocknix-joypad): check our source for the pattern and carry the fix. S
+- [ ] Hardware video decode on the H700 (Cedrus): Handtop adds `sunxi-cedrus.ko` with an H616 compatible string and a 64-byte
+      output stride patch so Panfrost can import frames, a DTB overlay for the video engine with no `iommus` (the IOMMU made the
+      display engine fault), and `cma=256M`. Useful for Steam's video playback and streaming (Moonlight/Remote Play) later. M
+- [ ] Boot-partition support knobs: `panel.txt` (force a DTB when the screen is garbled; Handtop picks the DTB at boot from a
+      board GPIO), timed boot logs (60 s and 3 min) next to our `bootlog-N.txt`. Relevant to other H700 devices. S
+- [ ] A `boot-abi` stamp (platform, kernel release, SHA-256 of `KERNEL`) checked before installing kernel modules, and a
+      kernel-deviation list kept in one doc in the same PR as each change (their `docs/kernel.md`). S
+- [ ] Pin upstream inputs with checksums and check them for drift weekly (their `build/upstreams.conf`); our kernel and
+      InputPlumber pins are similar but not checked automatically. S
+- [ ] A controls trial-and-revert pattern (15 s) for risky remaps, if we ever ship a remap UI. S
+
 ## References
 - Prior-art survey: Armada (armada-os/armada), Valve Holo Core aarch64, Steam Frame userspace ports,
   SildurFX/Switchdeck + LSE-Emu, sunshineinabox/proton-armv8, ChimeraOS gamescope-session-steam,

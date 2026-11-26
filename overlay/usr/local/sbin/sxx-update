@@ -42,7 +42,11 @@ check() {
 }
 
 apply() {
-  local out tag url shaurl flag want got
+  local out tag url shaurl flag want got bat=/sys/class/power_supply/battery
+  # the install is ten minutes of writes that must not be cut short: not on a low battery without the charger
+  if [ "$(cat $bat/status 2>/dev/null)" = Discharging ] && [ "$(cat $bat/capacity 2>/dev/null || echo 100)" -lt 40 ]; then
+    say "battery is below 40 % and not charging: plug in the charger first"; return 1
+  fi
   out=$(latest) || { say "could not reach the release server"; return 1; }
   { read -r tag; read -r url; read -r shaurl; read -r flag; } <<<"$out"
   newer "$tag" || { say "already up to date ($cur)"; return 7; }

@@ -36,10 +36,17 @@ u=/mnt/data/.sxx/update
 if [ -n "$boot" ] && [ -n "$data" ] && mkdir -p /mnt/data && mount -t ext4 -o rw "$data" /mnt/data 2>/dev/null; then
   # A freshly installed release is on trial until the system marks it good (sxx-update good, once Steam's UI has been up
   # for a while). Boots that never get there are counted; after three, the previous release is installed again.
-  if [ -f $u/trial ] && [ ! -f $u/pending ]; then
-    t=$(( $(cat $u/trial) + 1 )); echo $t > $u/trial; sync
+  # recovery.txt on the boot partition (writable from any PC) with a line "sxx=previous" asks for the previous release now.
+  force=0
+  if [ -f /mnt/boot/recovery.txt ] && grep -q '^sxx=previous' /mnt/boot/recovery.txt; then
+    mv /mnt/boot/recovery.txt /mnt/boot/recovery.txt.used; sync
+    force=1
+    [ -f $u/previous/root.img ] || show "recovery.txt asks for the previous release, but none is kept: flash the image again"
+  fi
+  if { [ -f $u/trial ] || [ $force = 1 ]; } && [ ! -f $u/pending ]; then
+    t=$(( $(cat $u/trial 2>/dev/null || echo 0) + 1 )); [ $force = 1 ] && t=99; [ -f $u/trial ] && echo $t > $u/trial; sync
     if [ $t -gt 3 ] && [ -f $u/previous/root.img ] && [ -d $u/previous/boot ]; then
-      show "SteamOSXX $(cat $u/installed/tag 2>/dev/null) did not start three times, going back to $(cat $u/previous/tag)"
+      show "SteamOSXX $(cat $u/installed/tag 2>/dev/null) is being replaced by $(cat $u/previous/tag)"
       cp $u/installed/tag $u/bad 2>/dev/null
       rm -rf $u/root.img $u/boot
       mv $u/previous/root.img $u/root.img; mv $u/previous/boot $u/boot; cp $u/previous/tag $u/pending
