@@ -196,6 +196,18 @@ trixie userspace. No gaming stack, but several transferable parts:
       InputPlumber pins are similar but not checked automatically. S
 - [ ] A controls trial-and-revert pattern (15 s) for risky remaps, if we ever ship a remap UI. S
 
+## Other projects reviewed (2026-11-26)
+- **Allium OS** (goweiwen/Allium): a Rust launcher for the Miyoo Mini family, not H700. Useful shape: a small always-on daemon
+  (`alliumd`: hotkeys, power, launching) plus short-lived UI binaries, and a desktop simulator so UI work needs no device. Its
+  suspend/resume mechanism is not documented in the README; nothing to copy for H700 sleep.
+- **Owner's Katamari PortMaster port** (`i-port-katamari`): runs an ARMv5 Android engine through a bionic/JNI loader on armhf, no
+  emulator. Reusable habits: probe the SDL video backend at run time (`--sdl-info`) instead of assuming one, a `fit` scaling
+  default for 640x480 panels (our Eets window is 800x600 on a 640x480 panel: add a per-game "fit" scale, e.g. an X11 scaling
+  wrapper in `sxx-fex`), bundle only the libraries a port needs with a manifest, and a packaging check that refuses to ship
+  game data. PortMaster's `gptokeyb` `.gptk` maps are the analogue of Steam Input templates here.
+- **QEMU virtual device** (`tools/qemu/`, `tests/qemu/`): a generic arm64 kernel with virtio built in boots our real initramfs and
+  image, so the updater (install, rollback, recovery.txt) is tested without hardware.
+
 ## References
 - Prior-art survey: Armada (armada-os/armada), Valve Holo Core aarch64, Steam Frame userspace ports,
   SildurFX/Switchdeck + LSE-Emu, sunshineinabox/proton-armv8, ChimeraOS gamescope-session-steam,
