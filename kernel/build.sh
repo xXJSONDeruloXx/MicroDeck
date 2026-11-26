@@ -105,6 +105,9 @@ step "rocknix-joypad (out of tree)"
 curl -fL -o "$WORK/joypad.tar.gz" "$JOYPAD_REPO/archive/$JOYPAD_COMMIT.tar.gz"
 echo "$JOYPAD_SHA256  $WORK/joypad.tar.gz" | sha256sum -c -
 rm -rf "$WORK/joypad" && mkdir "$WORK/joypad" && tar -xzf "$WORK/joypad.tar.gz" -C "$WORK/joypad" --strip-components=1
+# rumble: ff-memless calls the play callback from a timer, so it must not take the mutex the PWM work item holds (found by
+# the Handtop project on the RG35XX-H, same driver); kernel/patches/joypad-rumble-no-mutex.patch
+patch -d "$WORK/joypad" -p1 < "$ROOT/kernel/patches/joypad-rumble-no-mutex.patch"
 # its Makefile picks the driver by DEVICE: H700 is the single-ADC one this handheld uses
 make "${MAKE_ARGS[@]}" -C "$WORK/linux" M="$WORK/joypad" DEVICE=H700 modules >/dev/null
 mkdir -p "$OUT/modules/lib/modules/$KREL/rocknix-joypad"

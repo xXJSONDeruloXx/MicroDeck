@@ -181,7 +181,7 @@ trixie userspace. No gaming stack, but several transferable parts:
       (`hwclock` is not installed). A test with the virtual pad stopped left the device unreachable (the wake did not fire):
       find a wake that works (power key `axp20x-pek`, RTC alarm) before any release. Handtop reports ~5-6 %/hour in s2idle. M
 - [ ] Battery saver: cap the CPU at 1.0 GHz and dim the screen on low battery; clean shutdown at 5 % (Handtop's policy). S
-- [ ] Rumble: Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
+- [x] Rumble (patch carried 2026-11-26, in the next kernel build; verify on hardware): Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
       atomic context but takes a mutex the PWM work item holds; freezes the whole handheld) and patches it
       (`build/kernel/rocknix-joypad/0001-rumble-no-mutex-in-atomic-context.patch`). We build the same driver
       (`kernel/build.sh`, hackbar/rocknix-joypad): check our source for the pattern and carry the fix. S

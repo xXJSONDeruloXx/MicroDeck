@@ -1,0 +1,26 @@
+--- a/rocknix-singleadc-joypad.c	2026-10-08 20:10:58.000000000 -0400
++++ b/rocknix-singleadc-joypad.c	2026-11-26 16:30:22.689834100 -0500
+@@ -773,20 +773,16 @@
+ 	if (effect->type != FF_RUMBLE)
+ 		 return 0;
+ 
+-	mutex_lock(&joypad->lock);
+-	if (!joypad->rumble_enabled) {
+-		mutex_unlock(&joypad->lock);
++	/* ff-memless calls this from a timer (atomic context): a mutex here can sleep and deadlock against the work item */
++	if (!READ_ONCE(joypad->rumble_enabled))
+ 		return 0; // Ignore rumble effects if disabled
+-	}
+ 
+ 	if (effect->u.rumble.strong_magnitude)
+ 		boosted_level = effect->u.rumble.strong_magnitude + joypad->boost_strong;
+ 	else
+ 		boosted_level = effect->u.rumble.weak_magnitude + joypad->boost_weak;
+ 
+-	joypad->level = (u16)CLAMP(boosted_level, 0, 0xffff);
+-
+-	mutex_unlock(&joypad->lock);
++	WRITE_ONCE(joypad->level, (u16)CLAMP(boosted_level, 0, 0xffff));
+ 
+ 	schedule_work(&joypad->play_work);
+ 	return 0;
