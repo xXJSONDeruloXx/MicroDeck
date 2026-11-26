@@ -10,7 +10,7 @@
 #   tools/vm.sh push                   apply overlay/ to the running VM (tools/push-live.sh)
 #   tools/vm.sh shot [out.png]         screenshot of the VM display through the QEMU monitor
 #   tools/vm.sh log [n]                last n lines of the serial console
-#   tools/vm.sh test [updater|reflash|boot]   integration tests from a fresh disk: updater install/rollback/recovery.txt (default),
+#   tools/vm.sh test [updater [1] [2] [3]|reflash|boot]   integration tests from a fresh disk: updater install/rollback/recovery.txt (default),
 #                                      reflash keeping the data partition, boot smoke
 #   tools/vm.sh status
 set -uo pipefail
@@ -64,7 +64,7 @@ case "${1:-status}" in
     running && bash "$0" stop
     bash "$0" reset && bash "$0" inject && bash "$0" start || exit 1
     case "${2:-updater}" in
-      updater) python tests/qemu/update_flow.py ;;
+      updater) python tests/qemu/update_flow.py "${@:3}" ;;
       reflash) python tests/qemu/reflash_reuse.py ;;
       boot)    python tests/qemu/boot_smoke.py ;;
       *) echo "tests: updater | reflash | boot"; exit 2 ;;

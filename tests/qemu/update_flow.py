@@ -43,36 +43,55 @@ def stage(vm, tag, mutation=""):
         raise Failed("staging %s: %s" % (tag, out))
 
 
-def main():
-    vm = VM()
-    vm.wait_up(timeout=900)
-    check(vm, "findmnt -no SOURCE /home", "/dev/vda3", "firstboot made the data partition")
+def install_release(vm, tag, mutation=""):
+    stage(vm, tag, mutation)
+    vm.reboot(timeout=2400)
 
+
+def scenario_install(vm):
     print("== 1. a staged update installs, and is on trial until marked good")
-    stage(vm, "vA")
-    vm.reboot()
+    install_release(vm, "vA")
     check(vm, "cat /etc/qemu-marker /etc/sxx-release", "vA", "root replaced by vA")
     check(vm, "ls /home/.sxx/update", "trial", "vA is on trial")
     check(vm, "cat /home/.sxx/update/installed/tag", "vA", "vA recorded as installed")
     vm.sh("/usr/local/sbin/sxx-update good")
     check(vm, "test -e /home/.sxx/update/trial && echo still || echo cleared", "cleared", "trial cleared once marked good")
 
+
+def scenario_rollback(vm):
     print("== 2. a release that does not boot rolls back after three tries")
-    stage(vm, "vB", BREAK)
-    vm.reboot(timeout=2400)
+    install_release(vm, "vB", BREAK)
     check(vm, "cat /etc/qemu-marker", "vA", "back on vA")
     check(vm, "cat /home/.sxx/update/bad", "vB", "vB recorded as bad")
     vm.sh("/usr/local/sbin/sxx-update good")
 
+
+def scenario_recovery(vm):
     print("== 3. recovery.txt asks for the previous release")
-    stage(vm, "vC")
-    vm.reboot()
+    install_release(vm, "vC")
     vm.sh("/usr/local/sbin/sxx-update good")
     check(vm, "cat /etc/qemu-marker", "vC", "on vC")
+    check(vm, "ls /home/.sxx/update/previous", "tag", "vA is kept as the previous release")
     vm.sh("echo sxx=previous > /boot/firmware/recovery.txt; sync")
     vm.reboot()
     check(vm, "cat /etc/qemu-marker", "vA", "recovery.txt took it back to vA")
     check(vm, "ls /boot/firmware", "recovery.txt.used", "recovery.txt was consumed")
+
+
+def main():
+    vm = VM()
+    vm.wait_up(timeout=900)
+    check(vm, "findmnt -no SOURCE /home", "/dev/vda3", "firstboot made the data partition")
+    wanted = sys.argv[1:] or ["1", "2", "3"]
+    if "1" in wanted:
+        scenario_install(vm)
+    elif wanted != ["1"]:
+        install_release(vm, "vA")   # the later scenarios need vA installed (and so kept as the previous release)
+        vm.sh("/usr/local/sbin/sxx-update good")
+    if "2" in wanted:
+        scenario_rollback(vm)
+    if "3" in wanted:
+        scenario_recovery(vm)
     print("all update-flow checks passed")
 
 

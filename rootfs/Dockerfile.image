@@ -40,3 +40,9 @@ RUN chmod 700 /root/.ssh /home/steam/.ssh && chown -R steam:steam /home/steam/.s
  && systemctl set-default multi-user.target \
  && systemctl mask apt-daily.timer apt-daily-upgrade.timer man-db.timer e2scrub_all.timer dpkg-db-backup.timer \
  && rm -rf /usr/lib/modules/7.2.0 && for k in /usr/lib/modules/*; do depmod "$(basename $k)"; done && udevadm hwdb --update
+
+# Size: translations, man pages, docs and help files nobody reads on a handheld (about 200 MB of the 1.4 GB root); every release is
+# downloaded and unpacked on the device. Licence files are kept.
+RUN find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en*' ! -name locale.alias -exec rm -rf {} + \
+ && rm -rf /usr/share/man /usr/share/help /usr/share/info /usr/share/lintian \
+ && find /usr/share/doc -type f ! -name copyright -delete && find /usr/share/doc -type l -delete && find /usr/share/doc -depth -empty -delete
