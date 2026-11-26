@@ -179,7 +179,13 @@ trixie userspace. No gaming stack, but several transferable parts:
       InputPlumber must be stopped (or its USB/IP port detached) before and started after; then a wake source: the sun6i RTC
       is `/dev/rtc1` (`/dev/rtc0` is an I2C RTC without wakeup) and holds 1970, so set it from system time first
       (`hwclock` is not installed). A test with the virtual pad stopped left the device unreachable (the wake did not fire):
-      find a wake that works (power key `axp20x-pek`, RTC alarm) before any release. Handtop reports ~5-6 %/hour in s2idle. M
+      find a wake that works (power key `axp20x-pek`, RTC alarm) before any release. Checklist for the next attempt, done with the
+      device on a charger and someone able to press the power button: which IRQs are wake-enabled (`cat /sys/kernel/irq/*/wakeup`,
+      `/sys/class/wakeup/*`, `/proc/interrupts`), the sun6i RTC driver's suspend path in our kernel, whether the NMI/AXP717 line
+      (`sunxi-nmi`) is a wake IRQ, `/sys/power/pm_wakeup_irq` after a wake, `pm_debug_messages`, and do the first attempts with
+      `rtcwake -m freeze` plus a 20 s alarm set from the system clock (`echo $(( $(date +%s) + 20 )) > /sys/class/rtc/rtc1/wakealarm`)
+      after writing the correct time to rtc1 through `/sys/class/rtc/rtc1/` or `hwclock` (install util-linux-extra). The QEMU virtual
+      device cannot test this (no H700 power domains), so it is the one item that waits for the handheld. Handtop reports ~5-6 %/hour in s2idle. M
 - [ ] Battery saver: cap the CPU at 1.0 GHz and dim the screen on low battery; clean shutdown at 5 % (Handtop's policy). S
 - [x] Rumble (patch carried 2026-11-26, in the next kernel build; verify on hardware): Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
       atomic context but takes a mutex the PWM work item holds; freezes the whole handheld) and patches it
