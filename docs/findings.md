@@ -458,3 +458,9 @@ on another computer, so game runs need the account free.
 - Passing: staged update install with trial (`tools/vm.sh test updater 1`), a release that does not boot is rolled back after three
   boots with the failed tag recorded (2), `recovery.txt` with `sxx=previous` returns to the kept release (3). Not testable there:
   anything that needs the H700, the Mali, Steam's UI, the pad, Wi-Fi or sleep.
+- Install speed: the install used to write the whole 3 GiB root (about ten minutes on the card). The updater now lists the 1 MiB chunks
+  that hold anything the new filesystem uses (`sxx-used-chunks`, from `dumpe2fs`' free-block map) and the initramfs writes only those:
+  1548 of 3072 MiB for a v0.5-era image, with the pruned image fewer. A block the new filesystem calls free is never read, so stale data
+  there is harmless; metadata is never free. `tools/qemu/verify-chunks.sh` proves it on a real image by installing onto a random-filled
+  target and requiring a clean `e2fsck -fn` and `diff -r` equal trees. The first version of the parser fell back to the whole image on an
+  unexpected line, which is the intended failure mode.
