@@ -21,7 +21,7 @@ if [ ! -f cache/qemu/Image ]; then
 fi
 cp cache/qemu/Image out/qemu/Image
 xz -dc "$img" > out/qemu/disk.img
-truncate -s 8G out/qemu/disk.img
+truncate -s 12G out/qemu/disk.img
 mcopy -n -i out/qemu/disk.img@@16M ::initrd.cpio.gz out/qemu/initrd.cpio.gz
 mkdir -p secrets
 [ -f secrets/id_ed25519 ] || ssh-keygen -q -t ed25519 -N "" -f secrets/id_ed25519

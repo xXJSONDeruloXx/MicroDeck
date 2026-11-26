@@ -8,7 +8,7 @@ src=${1:?usage: tools/qemu/prepare.sh steamos-rg40xx.img.xz}
 mkdir -p out/qemu
 echo "== unpacking $src"
 xz -dc "$src" > out/qemu/disk.img
-truncate -s 8G out/qemu/disk.img
+truncate -s 12G out/qemu/disk.img
 echo "== reading the boot partition"
 env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w debian:trixie bash -c '
   apt-get update -qq && apt-get install -y -qq mtools >/dev/null

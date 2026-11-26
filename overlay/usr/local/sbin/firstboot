@@ -24,7 +24,9 @@ if [ ! -b "$data" ]; then
     fi
     echo "start=$start, type=83" | sfdisk --append --no-reread -q "$disk"
     partx -u "$disk" 2>/dev/null || partprobe "$disk" 2>/dev/null
-    for i in 1 2 3 4 5 6 7 8 9 10; do [ -b "$data" ] && break; sleep 1; done
+    # the node appears when udev has processed the new partition, which is slow on a busy or emulated system
+    udevadm settle --timeout=20 2>/dev/null
+    for i in $(seq 1 40); do [ -b "$data" ] && break; sleep 1; done
     if [ -b "$data" ]; then
       if [ "$found" = yes ]; then
         # the old filesystem may be smaller than a bigger card's partition: grow it to fit
