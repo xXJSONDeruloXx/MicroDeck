@@ -1,16 +1,17 @@
 """Integration test on the QEMU virtual device: staged update install, automatic rollback of a release that does not boot, and the
 recovery.txt trigger, all through the real initramfs (debug/initramfs/init) and the real image.
 
-  tools/qemu/build-kernel.sh && tools/qemu/prepare.sh <image.img.xz> && tools/qemu/run.sh &   (or run.sh in another terminal)
-  python tests/qemu/update_flow.py
+  tools/vm.sh test            (resets the disk, injects the current overlay and initramfs, boots, runs this)
+  python tests/qemu/update_flow.py    against a VM that is already running
 
 Each reboot runs the whole boot again under emulation, so the run takes a while.
 """
 import sys
 
-from session import Console
+from session import VM
 
 STAGE = r"""
+set -e
 U=/home/.sxx/update; rm -rf $U/root.img $U/boot $U/pending; mkdir -p $U/boot
 dd if=/dev/vda2 of=$U/root.img bs=1M conv=sparse status=none
 mkdir -p /mnt/r && mount -o loop $U/root.img /mnt/r
@@ -24,61 +25,61 @@ echo {tag} > $U/pending; sync
 BREAK = "mv /mnt/r/lib/systemd/systemd /mnt/r/lib/systemd/systemd.x"
 
 
-def check(c, command, expect, what):
-    rc, out = c.run(command)
-    ok = expect in out
+class Failed(Exception):
+    pass
+
+
+def check(vm, command, expect, what):
+    rc, out = vm.sh(command)
+    ok = rc == 0 and expect in out
     print("%s %s: %s" % ("ok  " if ok else "FAIL", what, out.replace("\n", " | ")[:120]))
     if not ok:
-        raise SystemExit(1)
+        raise Failed(what)
 
 
-def stage(c, tag, mutation=""):
-    rc, out = c.run(STAGE.format(tag=tag, mutation=mutation), timeout=900)
+def stage(vm, tag, mutation=""):
+    rc, out = vm.sh(STAGE.format(tag=tag, mutation=mutation), timeout=1200)
     if rc != 0:
-        print("staging %s failed: %s" % (tag, out))
-        raise SystemExit(1)
-
-
-def reboot_and_wait(c, wait=1800):
-    c.send("sync; reboot -f\n")
-    c.login(timeout=wait)
+        raise Failed("staging %s: %s" % (tag, out))
 
 
 def main():
-    c = Console()
-    c.connect()
-    print("== waiting for the first boot (data partition)")
-    c.login(timeout=900)
-    check(c, "findmnt -no SOURCE /home; ls /var/lib/firstboot.done", "/dev/vda3", "firstboot made the data partition")
+    vm = VM()
+    vm.wait_up(timeout=900)
+    check(vm, "findmnt -no SOURCE /home", "/dev/vda3", "firstboot made the data partition")
 
     print("== 1. a staged update installs, and is on trial until marked good")
-    stage(c, "vA", "")
-    reboot_and_wait(c)
-    check(c, "cat /etc/qemu-marker /etc/sxx-release", "vA", "root replaced by vA")
-    check(c, "cat /home/.sxx/update/installed/tag; ls /home/.sxx/update", "trial", "vA is on trial")
-    c.run("/usr/local/sbin/sxx-update good")
-    check(c, "ls /home/.sxx/update", "installed", "vA kept for rollback")
-    rc, out = c.run("test -e /home/.sxx/update/trial && echo still-on-trial || echo trial-cleared")
-    assert "trial-cleared" in out, out
+    stage(vm, "vA")
+    vm.reboot()
+    check(vm, "cat /etc/qemu-marker /etc/sxx-release", "vA", "root replaced by vA")
+    check(vm, "ls /home/.sxx/update", "trial", "vA is on trial")
+    check(vm, "cat /home/.sxx/update/installed/tag", "vA", "vA recorded as installed")
+    vm.sh("/usr/local/sbin/sxx-update good")
+    check(vm, "test -e /home/.sxx/update/trial && echo still || echo cleared", "cleared", "trial cleared once marked good")
 
     print("== 2. a release that does not boot rolls back after three tries")
-    stage(c, "vB", BREAK)
-    reboot_and_wait(c)
-    check(c, "cat /etc/qemu-marker; cat /home/.sxx/update/bad; cat /home/.sxx/update/installed/tag", "vA", "back on vA")
-    check(c, "cat /home/.sxx/update/bad", "vB", "vB recorded as bad")
-    c.run("/usr/local/sbin/sxx-update good")
+    stage(vm, "vB", BREAK)
+    vm.reboot(timeout=2400)
+    check(vm, "cat /etc/qemu-marker", "vA", "back on vA")
+    check(vm, "cat /home/.sxx/update/bad", "vB", "vB recorded as bad")
+    vm.sh("/usr/local/sbin/sxx-update good")
 
     print("== 3. recovery.txt asks for the previous release")
-    stage(c, "vC", "")
-    reboot_and_wait(c)
-    c.run("/usr/local/sbin/sxx-update good")
-    check(c, "cat /etc/qemu-marker", "vC", "on vC")
-    c.run("echo sxx=previous > /boot/firmware/recovery.txt; sync")
-    reboot_and_wait(c)
-    check(c, "cat /etc/qemu-marker; ls /boot/firmware", "vA", "recovery.txt took it back to vA")
-    check(c, "ls /boot/firmware", "recovery.txt.used", "recovery.txt was consumed")
+    stage(vm, "vC")
+    vm.reboot()
+    vm.sh("/usr/local/sbin/sxx-update good")
+    check(vm, "cat /etc/qemu-marker", "vC", "on vC")
+    vm.sh("echo sxx=previous > /boot/firmware/recovery.txt; sync")
+    vm.reboot()
+    check(vm, "cat /etc/qemu-marker", "vA", "recovery.txt took it back to vA")
+    check(vm, "ls /boot/firmware", "recovery.txt.used", "recovery.txt was consumed")
     print("all update-flow checks passed")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        main()
+    except Failed as e:
+        print("FAILED:", e)
+        print(VM.serial_tail(40))
+        sys.exit(1)

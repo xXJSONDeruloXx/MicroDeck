@@ -1,78 +1,49 @@
-"""Drive the QEMU virtual device (tools/qemu/run.sh) over its serial console socket."""
-import random
-import re
-import socket
+"""Drive the QEMU virtual device (tools/vm.sh): commands over SSH, reboots detected by the kernel's boot id, the serial log for diagnosis."""
+import os
+import subprocess
 import time
 
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SERIAL_LOG = os.path.join(ROOT, "out", "qemu", "serial.log")
 
-class Console:
-    def __init__(self, host="127.0.0.1", port=5555):
-        self.addr = (host, port)
-        self.sock = None
-        self.buf = ""
-        self.log = []
-        self.before = ""
 
-    def connect(self, timeout=60):
+class VM:
+    def __init__(self):
+        self.env = dict(os.environ, DEV_TARGET="vm", DEV_HOST="127.0.0.1", DEV_PORT="2222", MSYS_NO_PATHCONV="1")
+
+    def sh(self, command, timeout=300):
+        """Run a command as root in the VM; returns (exit status, output). Status 255 means ssh could not connect."""
+        try:
+            p = subprocess.run(["bash", "tools/dev.sh", "sh", command], cwd=ROOT, env=self.env, capture_output=True, text=True,
+                               timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 124, "timed out"
+        return p.returncode, (p.stdout + p.stderr).replace("\r", "").strip()
+
+    def boot_id(self):
+        rc, out = self.sh("cat /proc/sys/kernel/random/boot_id", timeout=20)
+        return out if rc == 0 and len(out) == 36 else None
+
+    def wait_up(self, timeout=900, not_boot_id=None):
+        """Wait until ssh answers, and (when given) from a boot other than not_boot_id."""
         end = time.time() + timeout
         while time.time() < end:
-            try:
-                self.sock = socket.create_connection(self.addr, timeout=2)
-                self.sock.settimeout(1)
-                return
-            except OSError:
-                time.sleep(1)
-        raise TimeoutError("no serial socket on %s:%d" % self.addr)
+            current = self.boot_id()
+            if current and current != not_boot_id:
+                return current
+            time.sleep(5)
+        raise TimeoutError("the VM did not come up; serial log tail:\n" + self.serial_tail())
 
-    def _read(self):
+    def reboot(self, timeout=1800):
+        """Reboot and wait for the new boot. Failing boots in between (a release that does not start) are waited through."""
+        old = self.boot_id()
+        self.sh("sync; (sleep 1; reboot -f) >/dev/null 2>&1 &", timeout=20)
+        return self.wait_up(timeout, not_boot_id=old)
+
+    @staticmethod
+    def serial_tail(n=30):
         try:
-            data = self.sock.recv(65536)
-        except socket.timeout:
-            return False
+            with open(SERIAL_LOG, errors="replace") as f:
+                return "".join(f.readlines()[-n:])
         except OSError:
-            return None
-        if not data:
-            return None
-        text = data.decode("utf-8", "replace")
-        self.log.append(text)
-        self.buf += text
-        return True
-
-    def expect(self, pattern, timeout=300):
-        """Wait for a regex in the console output; returns the match and drops everything up to it."""
-        end = time.time() + timeout
-        rx = re.compile(pattern)
-        while time.time() < end:
-            m = rx.search(self.buf)
-            if m:
-                self.before = self.buf[:m.start()]
-                self.buf = self.buf[m.end():]
-                return m
-            r = self._read()
-            if r is None:
-                time.sleep(0.5)
-                self.reconnect()
-        raise TimeoutError("timed out waiting for %r; last output: %r" % (pattern, self.buf[-400:]))
-
-    def reconnect(self):
-        try:
-            self.sock.close()
-        except OSError:
-            pass
-        self.connect(timeout=30)
-
-    def send(self, text):
-        self.sock.sendall(text.encode())
-
-    def login(self, timeout=600):
-        self.expect(r"login: ", timeout)
-        self.send("root\n")
-        self.expect(r"[#$] ", 60)
-
-    def run(self, command, timeout=300):
-        """Run a shell command; returns (exit status, output)."""
-        tag = "__END%d__" % random.randrange(10 ** 9)
-        self.buf = ""
-        self.send("%s; echo %s$?%s\n" % (command, tag, tag))
-        m = self.expect(re.escape(tag) + r"(\d+)" + re.escape(tag), timeout)
-        return int(m.group(1)), self.before.split("\n", 1)[-1].strip()
+            return "(no serial log)"

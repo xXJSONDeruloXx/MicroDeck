@@ -10,7 +10,8 @@ set -x
 root=$(findmnt -no SOURCE /)
 disk=/dev/$(lsblk -no PKNAME "$root")
 rootpart=${root##*/}
-data=${disk}p3
+# mmcblk0 and nvme0n1 name their partitions disk+"p"+N, vda and sda disk+N (the QEMU virtual device is vda)
+case "$disk" in *[0-9]) data=${disk}p3 ;; *) data=${disk}3 ;; esac
 
 if [ ! -b "$data" ]; then
   set -- $(sfdisk -d "$disk" | sed -n "s/.*${rootpart} : start= *\([0-9]*\), size= *\([0-9]*\).*/\1 \2/p")

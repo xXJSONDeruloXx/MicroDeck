@@ -115,7 +115,7 @@ case "${1:-}" in
   reconcile) reconcile ;;
   check) check ;;
   apply) apply ;;
-  status) echo "version: $cur"; [ -f "$STATE/pending" ] && echo "staged: $(cat "$STATE/pending")" ;;
+  status) echo "version: $cur"; [ -f "$STATE/pending" ] && echo "staged: $(cat "$STATE/pending")"; true ;;
   steamos)
     shift
     # Steam passes flags first (--enable-duplicate-detection check), so look for the verb anywhere
