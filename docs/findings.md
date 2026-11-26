@@ -428,3 +428,22 @@ on another computer, so game runs need the account free.
   1.1 GB first-start download (Steam client plus Proton) is therefore link-limited: parallel downloads or a mirror
   would not change much. Levers: a better link (5 GHz), less to download (see the nibOS ideas in the roadmap:
   pre-seeding Steam/Proton on a data partition), or both.
+
+### Linux x86 games under FEX (2026-11-26)
+- Steam's own chain (Steam Linux Runtime 1.0 -> 2.0 -> Valve's `FEX` tool) needs SteamOS's `/usr/share/guestos/fex-mesa` guest OS
+  and runs pressure-vessel itself under FEX, which cannot import the host's graphics here. We run FEX directly instead
+  (`sxx-fex`, a Steam compatibility tool): Steam Linux Runtime 4.0's x86 platform as the guest root, Valve's FEX GL/DRM/ALSA
+  thunks to the host Panfrost, and the old Steam Runtime ("scout") libraries only for what the root lacks (libvorbisfile.so.3,
+  libopenal 1.16, libGLU ...).
+- `vm.overcommit_memory=1` is required: FEX reserves 4-6 GB per process and the default heuristic refuses any single mapping
+  larger than RAM plus swap (`__vm_enough_memory` in dmesg), which made every fork inside FEX fail with ENOMEM.
+- SDL 1.2 games never set `_NET_WM_PID`, so `sxx-focus` could not tell whose window it was and Steam's UI stayed on top of a game
+  that was running (sound, no window). It now asks the X server (XRes) for the owning process.
+- Steam applies a per-app compatibility-tool request from DevTools a minute or more later, and sometimes not at all; mappings for
+  Linux-only games are written into `config.vdf` before Steam starts (`sxx-compat-default --seed`), with the DevTools request as a
+  second path.
+- Results: Hotline Miami (32-bit, Qt launcher + GameMaker GL) and Eets (64-bit, FNA GL on the Mali-G31) run; Hotline's window is
+  up 22 s after launch, Eets in front in about 30 s.
+- Steam side, not ours: with the account shared by several devices, a launch can stall at "Synchronizing cloud" or
+  "SynchronizingControllerConfig" (cloud sync failing, "Roaming Config ... Failure"), and Steam ends a running game when another
+  device starts one. Steam's offline mode (`SteamClient.User.GoOffline()`) avoids both for testing.
