@@ -36,6 +36,7 @@ def main():
             dst.write(chunk)
             remaining -= len(chunk)
     print("ok   boot and root partitions rewritten from the image (data partition untouched)")
+    vm_script("inject")   # the new image carries the current overlay
     print(vm_script("start"))
     vm.wait_up(timeout=900)
     rc, out = vm.sh("findmnt -no SOURCE /home; cat /home/marker; journalctl -u firstboot --no-pager | grep -E 'reusing|created' | cut -c1-100")

@@ -10,7 +10,7 @@
 #   tools/vm.sh push                   apply overlay/ to the running VM (tools/push-live.sh)
 #   tools/vm.sh shot [out.png]         screenshot of the VM display through the QEMU monitor
 #   tools/vm.sh log [n]                last n lines of the serial console
-#   tools/vm.sh test [updater [1] [2] [3]|reflash|boot]   integration tests from a fresh disk: updater install/rollback/recovery.txt (default),
+#   tools/vm.sh test [updater [1] [2] [3]|reflash|download [img.xz]|boot]   integration tests from a fresh disk: updater install/rollback/recovery.txt (default),
 #                                      reflash keeping the data partition, boot smoke
 #   tools/vm.sh status
 set -uo pipefail
@@ -66,8 +66,9 @@ case "${1:-status}" in
     case "${2:-updater}" in
       updater) python tests/qemu/update_flow.py "${@:3}" ;;
       reflash) python tests/qemu/reflash_reuse.py ;;
+      download) python tests/qemu/update_download.py "${3:-$Q/ci/steamos-rg40xx.img.xz}" ;;
       boot)    python tests/qemu/boot_smoke.py ;;
-      *) echo "tests: updater | reflash | boot"; exit 2 ;;
+      *) echo "tests: updater | reflash | download | boot"; exit 2 ;;
     esac ;;
   status)
     if running; then echo "vm: running (pid $(cat $Q/vm.pid))"; ssh_ok && echo "ssh: ok" || echo "ssh: not yet"; else echo "vm: stopped"; fi ;;
