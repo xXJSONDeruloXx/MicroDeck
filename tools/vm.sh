@@ -10,7 +10,8 @@
 #   tools/vm.sh push                   apply overlay/ to the running VM (tools/push-live.sh)
 #   tools/vm.sh shot [out.png]         screenshot of the VM display through the QEMU monitor
 #   tools/vm.sh log [n]                last n lines of the serial console
-#   tools/vm.sh test                   the updater integration test (install, rollback, recovery.txt); resets the disk first
+#   tools/vm.sh test [updater|reflash|boot]   integration tests from a fresh disk: updater install/rollback/recovery.txt (default),
+#                                      reflash keeping the data partition, boot smoke
 #   tools/vm.sh status
 set -uo pipefail
 export MSYS_NO_PATHCONV=1
@@ -59,8 +60,15 @@ case "${1:-status}" in
     monitor "screendump $out" >/dev/null; echo "$out" ;;
   log) tail -n "${2:-60}" $Q/serial.log | tr -d '\r' ;;
   test)
+    # tools/vm.sh test [updater|reflash]: both run from a fresh disk with the current overlay and initramfs injected
     running && bash "$0" stop
-    bash "$0" reset && bash "$0" inject && bash "$0" start && python tests/qemu/update_flow.py ;;
+    bash "$0" reset && bash "$0" inject && bash "$0" start || exit 1
+    case "${2:-updater}" in
+      updater) python tests/qemu/update_flow.py ;;
+      reflash) python tests/qemu/reflash_reuse.py ;;
+      boot)    python tests/qemu/boot_smoke.py ;;
+      *) echo "tests: updater | reflash | boot"; exit 2 ;;
+    esac ;;
   status)
     if running; then echo "vm: running (pid $(cat $Q/vm.pid))"; ssh_ok && echo "ssh: ok" || echo "ssh: not yet"; else echo "vm: stopped"; fi ;;
   *) sed -n 2,16p "$0"; exit 2 ;;
