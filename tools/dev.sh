@@ -9,9 +9,11 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 KEY=secrets/id_ed25519
 HOST=${DEV_HOST:-rg40xx.local}
-SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
+PORT=${DEV_PORT:-22}
+SSH=(ssh -p "$PORT" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
 
 adb_serial() {
+  [ "${DEV_TARGET:-}" = vm ] && return 0   # the QEMU virtual device (tools/vm.sh) is reached over SSH only
   adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | while read -r s; do
     [ "$(adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r')" = rg40xx ] && { echo "$s"; break; }
   done
@@ -35,7 +37,7 @@ case "${1:-status}" in
     run 'ffmpeg -hide_banner -loglevel error -y -device /dev/dri/card1 -f kmsgrab -i - -vf hwdownload,format=bgr0 -frames:v 1 /tmp/shot.png' >/dev/null 2>&1
     s=$(adb_serial)
     if [ -n "$s" ]; then adb -s "$s" pull /tmp/shot.png "$out" >/dev/null
-    else scp -q -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@$HOST:/tmp/shot.png" "$out"; fi
+    else scp -q -P "$PORT" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "root@$HOST:/tmp/shot.png" "$out"; fi
     echo "$out" ;;
   *) echo "usage: $0 status|sh CMD|ssh ARGS|shot [png]"; exit 2 ;;
 esac

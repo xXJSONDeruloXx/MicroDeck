@@ -14,6 +14,7 @@ env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -v "$(pwd -W 2>/de
   apt-get update -qq && apt-get install -y -qq mtools >/dev/null
   mcopy -n -i out/qemu/disk.img@@16M ::initrd.cpio.gz out/qemu/initrd.cpio.gz
   mcopy -n -i out/qemu/disk.img@@16M ::extlinux/extlinux.conf out/qemu/extlinux.conf
+  mcopy -o -i out/qemu/disk.img@@16M /w/secrets/id_ed25519.pub ::authorized_keys
   ls -la out/qemu/initrd.cpio.gz'
 cp out/qemu/disk.img out/qemu/disk.base.img 2>/dev/null || true
 echo "== ready: tools/qemu/run.sh"

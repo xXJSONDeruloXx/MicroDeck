@@ -106,3 +106,16 @@ jobs:
             out/steamos-rg40xx.img.xz.sha256
             out/uboot/fel-boot.bin
             out/uboot/fel-reset.bin
+
+  vm-boot:
+    needs: image
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: image, path: out}
+      - uses: actions/cache@v4
+        with:
+          path: cache/qemu/Image
+          key: qemu-kernel-${{ hashFiles('tools/qemu/ci.sh') }}
+      - run: bash tools/qemu/ci.sh out/steamos-rg40xx.img.xz

@@ -11,7 +11,7 @@ cd "$(dirname "$0")/.."
 restart=0; [ "${1:-}" = -r ] && { restart=1; shift; }
 KEY=secrets/id_ed25519
 HOST=${DEV_HOST:-rg40xx.local}
-SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10)
+SSH=(ssh -p "${DEV_PORT:-22}" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10)
 dev() { "${SSH[@]}" "root@$HOST" "$@"; }
 
 # Packages the image installs, read from the Dockerfile's apt-get lines (backports pin and flags dropped).
