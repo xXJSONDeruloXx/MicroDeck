@@ -12,6 +12,7 @@ from session import VM
 
 STAGE = r"""
 set -e
+sync   # a copy of a live filesystem must not catch files whose data is still in the page cache
 U=/home/.sxx/update; rm -rf $U/root.img $U/boot $U/pending; mkdir -p $U/boot
 dd if=/dev/vda2 of=$U/root.img bs=1M conv=sparse status=none
 mkdir -p /mnt/r && mount -o loop $U/root.img /mnt/r

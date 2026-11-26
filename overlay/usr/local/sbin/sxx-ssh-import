@@ -10,7 +10,8 @@ mirror=/home/.sxx
 [ -f "$f" ] || f=$mirror/authorized_keys
 [ -f "$f" ] || exit 0
 sum=$(sha256sum "$f" | cut -d' ' -f1)
-[ "$(cat "$state" 2>/dev/null)" = "$sum" ] && exit 0
+# the checksum alone is not enough: an installed key file that is empty or missing (a copied or interrupted root) is imported again
+[ "$(cat "$state" 2>/dev/null)" = "$sum" ] && [ -s /root/.ssh/authorized_keys ] && exit 0
 keys=$(mktemp)
 tr -d '\r' < "$f" | grep -E '^(ssh-|ecdsa-|sk-)' > "$keys"
 [ -s "$keys" ] || { echo "sxx-ssh-import: no public keys in $f"; rm -f "$keys"; exit 1; }
