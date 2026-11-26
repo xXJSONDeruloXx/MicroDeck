@@ -23,6 +23,7 @@ brings KMS, Panfrost, PipeWire, user namespaces and SysV IPC.
 | Display | yes | DSI panel via sun4i-drm/KMS, Xorg modesetting + glamor on Panfrost |
 | GPU | partial | Panfrost GL 3.1 / GLES 3.1 (Mesa 26.1); PanVK Vulkan 1.0 for native programs (`panvk-run`), not enough for DXVK |
 | Steam | yes | `steamdeck_publicbeta` linuxarm64 client, `-gamepadui -steamos3`, LSE atomics emulated (ARMv8.0) |
+| Linux x86 games | works (first tests) | games with only a Linux build run through Valve's FEX with Steam's x86 runtime (`sxx-fex`, selected automatically); first one: Hotline Miami |
 | Games | yes, slow | Proton ARM64 (Valve's, or [proton-armv8](https://github.com/sunshineinabox/proton-armv8)) + FEX; Direct3D on the GPU through WineD3D/Panfrost (D3D10/11 need DXVK on llvmpipe, slow). See [docs/games.md](docs/games.md) |
 | SteamOS session | partial | gamescope's focus protocol on Xorg (`sxx-focus`): games in front, Steam button menu over them; power menu; brightness slider; volume |
 | Audio | yes | H616 codec through PipeWire in the session; speaker and headphone jack |

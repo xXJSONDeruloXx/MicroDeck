@@ -94,7 +94,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       pinned release (SHA256 in `/usr/local/share/sxx/proton-armv8.conf`) into `compatibilitytools.d` before
       Steam's first start, and `sxx-steam-defaults` makes it the global compatibility tool unless one is set.
       LSE-Emu stays for the client only. Verified on a from-scratch image (2026-11-25).
-- [~] Native x86 Linux games through FEX (started 2026-11-26; DroidDeck does this too, `droiddeck-fex`). Findings: Steam's own
+- [~] Native x86 Linux games through FEX (WORKS 2026-11-26: Hotline Miami's title screen and first level run from Steam; open: more titles, pad input, first-launch time, auto-install of the FEX tool and SLR 4.0; started 2026-11-26; DroidDeck does this too, `droiddeck-fex`). Findings: Steam's own
       chain (Steam Linux Runtime 1.0 -> 2.0 -> Valve's `FEX` tool, app 3127680) needs SteamOS's `/usr/share/guestos/fex-mesa`
       guest OS and fails here (it runs pressure-vessel under FEX and cannot import host graphics); FEX itself runs x86 programs
       fine from Steam's runtime platform (`uname` says x86_64) once `vm.overcommit_memory=1` (FEX reserves 4-6 GB, the default

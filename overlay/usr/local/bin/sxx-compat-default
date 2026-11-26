@@ -59,6 +59,63 @@ def sxx(js):
     return subprocess.run(["sxx", "eval", js], capture_output=True, text=True, timeout=30)
 
 
+FEX_TOOL = "sxx-fex"
+# Steam's own tools and runtimes: never games
+NOT_GAMES = {"228980", "1070560", "1391110", "1628350", "3127680", "4183110", "4185400", "4427310", "4628740"}
+PREREQUISITES = ("3127680", "4183110")  # Valve's FEX tool and Steam Linux Runtime 4.0, which sxx-fex runs on
+
+
+def elf_machine(path):
+    try:
+        with open(path, "rb") as f:
+            head = f.read(20)
+    except OSError:
+        return None
+    return int.from_bytes(head[18:20], "little") if head[:4] == b"\x7fELF" else None
+
+
+def is_linux_x86_only(folder):
+    """An installed game whose top two folder levels hold x86 Linux programs and no Windows ones: Steam installed its Linux
+    build, which this ARM board runs through FEX (sxx-fex)."""
+    found = False
+    for root, dirs, files in os.walk(folder):
+        if root[len(folder):].count(os.sep) >= 2:
+            dirs[:] = []
+            continue
+        for name in files:
+            if name.lower().endswith((".exe", ".dll")):
+                return False
+            if not found and elf_machine(os.path.join(root, name)) in (3, 62):
+                found = True
+    return found
+
+
+def installed_apps():
+    apps = os.path.join(STEAM, "steamapps")
+    try:
+        names = os.listdir(apps)
+    except OSError:
+        return
+    for name in names:
+        m = re.match(r"appmanifest_(\d+)\.acf$", name)
+        if not m or m.group(1) in NOT_GAMES:
+            continue
+        text = open(os.path.join(apps, name), encoding="utf-8", errors="replace").read()
+        flags = re.search(r'"StateFlags"\s*"(\d+)"', text)
+        folder = re.search(r'"installdir"\s*"([^"]*)"', text)
+        if flags and int(flags.group(1)) & 4 and folder:
+            yield m.group(1), os.path.join(apps, "common", folder.group(1))
+
+
+def tool_installed(appid):
+    path = os.path.join(STEAM, "steamapps", "appmanifest_%s.acf" % appid)
+    try:
+        flags = re.search(r'"StateFlags"\s*"(\d+)"', open(path).read())
+    except OSError:
+        return False
+    return bool(flags and int(flags.group(1)) & 4)
+
+
 def main():
     mine = ours()
     if not mine:
@@ -77,6 +134,26 @@ def main():
                 if sxx(call).returncode == 0:
                     handled.add(app)
                     print("sxx-compat-default: app %s moved from %s to %s" % (app, mapping[app], mine), flush=True)
+            # Linux-only x86 games: no mapping means Steam runs the Linux build natively, which cannot execute here
+            for app, folder in installed_apps():
+                key = "fex:" + app
+                if key in handled:
+                    continue
+                if mapping.get(app) == FEX_TOOL:  # it took: from here on a tool chosen by hand is left alone
+                    handled.add(key)
+                    todo.append(app)
+                    continue
+                if app in mapping or not is_linux_x86_only(folder):
+                    continue
+                for pre in PREREQUISITES:
+                    if not tool_installed(pre) and "pre:" + pre not in handled:
+                        sxx("SteamClient.URL.ExecuteSteamURL('steam://install/%s')" % pre)
+                        handled.add("pre:" + pre)
+                        print("sxx-compat-default: asked Steam to install tool %s for Linux x86 games" % pre, flush=True)
+                # Steam ignores a tool it has not finished registering (about 40 s after it starts): asked again every pass
+                # until the mapping shows up in config.vdf
+                if sxx("SteamClient.Apps.SpecifyCompatTool(%s,'%s')" % (app, FEX_TOOL)).returncode == 0:
+                    print("sxx-compat-default: app %s is a Linux x86 game, asked for %s" % (app, FEX_TOOL), flush=True)
             if todo:
                 os.makedirs(os.path.dirname(STATE), exist_ok=True)
                 json.dump(sorted(handled), open(STATE, "w"))
