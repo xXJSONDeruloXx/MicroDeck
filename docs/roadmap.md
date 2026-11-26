@@ -126,6 +126,13 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [ ] Steam UI speed: CEF on the GPU (`CEF_GPU=1`, Panfrost GLES) vs software; webhelper memory. M
 - [ ] Desktop mode via `steamos-session-select desktop` (optional, lightweight). M
 
+- [ ] Low priority UI glitch: a small gray square with a monitor-and-waves ("cast") glyph appears at the top-left of Steam's launch
+      screen controller diagram (the "This game will use the Official Layout" screen), overlapping the D-pad icon; it is not on
+      the interstitial screens. Not Chromium's cast button: it is Steam's own element. Hypothesis: Steam's connection-type badge
+      for our virtual Deck controller (a USB/IP `vhci_hcd` device, 28de:1205) reads as "remote". Next: catch the element
+      (hold the launch screen open, `document.elementsFromPoint` at CSS px = screen px x 1.47) and see what decides the glyph;
+      the fix, if any, belongs in how InputPlumber presents the device (its sysfs/HID bus attributes), not in Steam. S
+
 ## 4. Hardware
 - [ ] Sleep/wake: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM
       type and timings, `opp-suspend`, axp20x-pek wake, phy/mmc fixes). Test only with `rtcwake` alarms. M/L
