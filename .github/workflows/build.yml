@@ -11,6 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tools/ci-checks.sh
   kernel:
     uses: ./.github/workflows/kernel.yml
   inputplumber:

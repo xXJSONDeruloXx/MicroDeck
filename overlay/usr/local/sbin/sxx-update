@@ -9,8 +9,8 @@ set -u
 [ -f /etc/sxx-update.env ] && . /etc/sxx-update.env   # SXX_UPDATE_REPO / SXX_UPDATE_API overrides, for testing
 REPO=${SXX_UPDATE_REPO:-xXJSONDeruloXx/SteamOSXX}
 API=${SXX_UPDATE_API:-https://api.github.com/repos/$REPO/releases/latest}
-STATE=/home/.sxx/update
-cur=$(cat /etc/sxx-release 2>/dev/null || echo dev)
+STATE=${SXX_UPDATE_STATE:-/home/.sxx/update}
+cur=$(cat "${SXX_RELEASE_FILE:-/etc/sxx-release}" 2>/dev/null || echo dev)
 say() { echo "sxx-update: $*" >&2; }
 
 latest() {
@@ -107,6 +107,8 @@ reconcile() {
 }
 # Called once Steam's UI has been up for a while: the release on trial is good, so the initramfs stops counting.
 good() { rm -f "$STATE/trial"; reconcile; }
+
+[ -n "${SXX_UPDATE_SOURCED:-}" ] && return 0   # tests load the functions without running a command
 
 case "${1:-}" in
   good) good ;;
