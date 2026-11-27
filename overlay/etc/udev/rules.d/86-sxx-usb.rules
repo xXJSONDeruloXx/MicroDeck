@@ -1,0 +1,2 @@
+# The USB gadget Ethernet (usb0, see usb-gadget) is a real uplink here; Debian's 85-nm-unmanaged.rules would hide it from NetworkManager.
+SUBSYSTEM=="net", ACTION=="add|change|move", KERNEL=="usb0", ENV{NM_UNMANAGED}="0"

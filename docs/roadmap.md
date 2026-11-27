@@ -181,6 +181,13 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 ## 6. Release
 - [ ] Release images on GitHub with an install guide (flash, first boot, recovery).
 - [ ] Other H700 devices (RG35XX family, RG40XX-V): DTB and DRAM per device.
+- [x] Ethernet over the USB cable for devices without Wi-Fi (RG28XX): `usb-gadget` adds a CDC-NCM function when the board has no
+      `wlan0` (or `/boot/firmware/usbnet` exists); Windows, macOS and Linux bind it without a driver. NetworkManager profile
+      `sxx-usb` (udev override `86-sxx-usb.rules` because Debian hides gadget interfaces) takes DHCP when the PC shares its
+      connection and always keeps 169.254.58.58, which the PC reaches with no setup (verified on the RG40XX-H: ping and SSH).
+      Internet: Windows Internet Connection Sharing from the Wi-Fi/Ethernet adapter to the "UsbNcm" adapter.
+- [ ] RG28XX itself: DRAM parameters from its stock boot0 (`tools/boot0-dram.py`, read over adb on muOS), own U-Boot card.bin,
+      `sun50i-h700-anbernic-rg28xx.dtb` (already in the ROCKNIX DTB set), portrait panel rotation, its joypad variant.
 
 ## Ideas from Handtop (junsulee119/handtop, reviewed 2026-11-26)
 Handtop is a Debian desktop (labwc, no Steam) for the sibling RG35XX-H: same H700, ROCKNIX kernel/DTBs unchanged, Debian

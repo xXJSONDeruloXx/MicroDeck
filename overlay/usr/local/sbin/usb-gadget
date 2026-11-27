@@ -28,6 +28,16 @@ start() {
   echo "adb" > $G/configs/c.1/strings/0x409/configuration
   echo 500 > $G/configs/c.1/MaxPower
   [ -L $G/configs/c.1/ffs.adb ] || ln -s $G/functions/ffs.adb $G/configs/c.1/
+  # Ethernet over the same cable (NCM: Windows 11, macOS and Linux bind it without a driver): for a device with no Wi-Fi (RG28XX) or
+  # when /boot/firmware/usbnet exists. The PC shares its connection (Windows: Internet Connection Sharing) and the handheld gets an
+  # address by DHCP (NetworkManager profile sxx-usb), so it has internet and SSH over USB.
+  if [ -f /boot/firmware/usbnet ] || [ ! -e /sys/class/net/wlan0 ]; then
+    mkdir -p $G/functions/ncm.usb0
+    h=$(serial | sha256sum | cut -c1-6 | sed 's/\(..\)\(..\)\(..\)/\1:\2:\3/')
+    echo "02:58:58:$h" > $G/functions/ncm.usb0/dev_addr
+    echo "06:58:58:$h" > $G/functions/ncm.usb0/host_addr
+    [ -L $G/configs/c.1/ncm.usb0 ] || ln -s $G/functions/ncm.usb0 $G/configs/c.1/
+  fi
   mkdir -p $FFS
   mountpoint -q $FFS || mount -t functionfs adb $FFS
   /usr/sbin/adbd &
