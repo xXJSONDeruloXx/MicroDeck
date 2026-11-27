@@ -147,8 +147,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       `disableRemotePlayback` property (the button reads the content attribute). `sxx-ui-fixes.service` (`sxx ui-fixes`) keeps a DevTools
       connection per Steam UI page and sets `disableremoteplayback` on each `<video>` as it is added (a MutationObserver, registered with
       `Page.addScriptToEvaluateOnNewDocument` and run once on the current document). Checked with Sonic Mania. It needs `CDP_PORT` in
-      `/etc/steam-session.conf` (the default). Related: it is why the glyph only showed on handhelds that reached the screen online; the screen
-      appears for games with an official layout.
+      `/etc/steam-session.conf` (the default). The screen appears for games with an official layout.
 
 ## 4. Hardware
 - [ ] Sleep/wake: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM
