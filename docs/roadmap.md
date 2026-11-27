@@ -150,7 +150,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 ## 5. GPU / gamescope (long shot)
 - [x] PanVK on Bifrost v7 (Mesa 26.1, `panvk-run`): works for native Vulkan, Vulkan 1.0, cannot run DXVK or gamescope (no robustness2, geometry shaders). Revisit with Mesa 26.3 (Vulkan 1.3 on v7) once packaged. S
 - [ ] Hardware DXVK research plan (docs/research/panvk-vulkan-dxvk.md, from the owner's gist, 2026-11-26), in order:
-      (1) reproducible Mesa 26.3.1+ build in an isolated prefix (`VK_DRIVER_FILES`), record `vulkaninfo` and regress Xorg/Steam/WineD3D. M
+      (1) [built 2026-11-26: `tools/mesa/build.sh` cross-builds Mesa 26.3.1 PanVK + Panfrost GL/EGL/GBM for arm64 into a `/opt/mesa-sxx` tarball (7 MB, X11 only, Docker volume cache); `tools/mesa/try-on-device.sh` installs it in isolation and records `vulkaninfo` and the DXVK-relevant features; waiting for the device] reproducible Mesa 26.3.1+ build in an isolated prefix (`VK_DRIVER_FILES`), record `vulkaninfo` and regress Xorg/Steam/WineD3D. M
       (2) feature audit on the device (robustness2/nullDescriptor, transform feedback, descriptor indexing, geometry emulation),
       then DXVK version audit: D3D9 first, 1.10.3 as a diagnostic, the DXVK inside our Proton, then D3D10/11. M
       (3) read and selectively port ideas from JimVulkan/mali-panvk (Android kbase; reuse NIR lowering and feature code, keep
