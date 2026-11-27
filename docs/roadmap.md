@@ -231,7 +231,14 @@ trixie userspace. No gaming stack, but several transferable parts:
       resume came from the RTC alarm each time. Shipped OFF by default (v0.7.1+): an empty file `sleep` on the boot partition (or
       `sxx-sleep on`) turns it on (`/run/systemd/sleep.conf.d/50-sxx.conf`: AllowSuspend=yes, freeze; logind: short power press suspends, long
       press powers off; a 3 s power-key hold-off after resume so the waking press does not sleep it again). `sxx-sleep test [secs]` sleeps
-      through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). OPEN PROBLEM (2026-11-27 05:20): a 30-minute test (`sxx-sleep test 1800`, RTC alarm +1800 s) on the RG40XX-H,
+      through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). ROOT CAUSE FOUND (2026-11-27 08:00, see the OPEN PROBLEM below for how it showed): s2idle keeps the monotonic clock running, so a
+      sleep longer than a service's 3-minute `WatchdogSec` makes systemd kill that service the instant the handheld wakes (the journal shows
+      `Watchdog timeout (limit 3min)! ... SIGABRT` for logind, journald, timesyncd right after `PM: suspend exit`, after the 3, 10 and 30 minute
+      sleeps). logind restarts without announcing the wake, so NetworkManager stays "asleep" and the network never comes back: the RG28XX
+      kept `usb0` down for 90 minutes and the RG40XX-H would have had no Wi-Fi (awake but unreachable). Fix: `WatchdogSec=0` drop-ins for the five
+      units that have one (hostnamed, journald, logind, timesyncd, udevd, `10-sxx-no-watchdog.conf`). Verified on the RG28XX: a 4-minute sleep,
+      zero watchdog kills, NetworkManager reconnected 16 s after the wake. Still to do on the RG40XX-H: a 30-minute sleep after updating it.
+      OPEN PROBLEM (2026-11-27 05:20): a 30-minute test (`sxx-sleep test 1800`, RTC alarm +1800 s) on the RG40XX-H,
       running standalone from slot 1 on battery over Wi-Fi, never came back: no ping or SSH 25 minutes after the alarm, while 40 s tests on the
       same unit (two) and on the RG28XX (four, including Steam's own Sleep and a game in front) all woke on time and reconnected in about 8 s.
       Candidates: the long RTC alarm did not fire (try +120, +300, +600 on the RG28XX over adb, where a failure is visible), the Wi-Fi chip
