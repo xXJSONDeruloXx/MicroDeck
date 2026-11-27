@@ -56,7 +56,7 @@ Tested on one RG40XX-H (LPDDR4). Other units may need different RAM timings (see
 1. Download `steamos-rg40xx.img.xz` and its `.sha256` from the latest release and check the hash.
 2. Write it to a microSD card of 16 GB or more (balenaEtcher, or `xzcat steamos-rg40xx.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync`).
 3. Wi-Fi: on the card's small `STEAMBOOT` partition copy `wifi.txt.example` to `wifi.txt` and fill in `ssid=` and
-   `psk=`. The first start downloads about 1 GB (Valve's Steam client and a Proton build for this CPU).
+   `psk=` (add `band=a` to use 5 GHz only, usually much faster). The first start downloads about 1 GB (Valve's Steam client and a Proton build for this CPU).
 4. Put the card in **slot 1** (TF1, the boot slot) and power on. The first start grows the root partition to the
    card, then shows a "Setting up SteamOSXX" progress window and Steam's own update screen: allow up to an hour (about 58 minutes on a home connection in the first test).
 5. Sign in to Steam with the QR code. Games that need Proton use the ARMv8.0 build automatically.
