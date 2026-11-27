@@ -79,7 +79,8 @@ Not copied: Arch as the base, lz4-only zram (our lzo-rle plus idle zstd keeps th
 once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 
 ## 1. Reproducibility (do first; many fixes were applied live)
-- [ ] Diff the running device against `overlay/` + `rootfs/` and fold in anything missing. S
+- [x] Diff the running device against `overlay/` + `rootfs/` (2026-11-27, RG40XX-H on v0.7.0): all 93 overlay files match by SHA-256; the only
+      extra files under `/usr/local` and the config directories are package files, the Wi-Fi profile and binaries built from `rootfs/src`. S
 - [x] Rebuild rootfs and image from scratch, flash slot 2 from muOS, FEL-boot, restore the Steam backup,
       `tools/smoke.sh` and `sxx-gametest` pass (2026-11-24). `tools/reflash-slot2.sh`, `backup-steam.sh`,
       `restore-steam.sh`. `tools/cycle.sh` chains build + flash + restore + test (written 2026-11-25, not yet run end to end).
