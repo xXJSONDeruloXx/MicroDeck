@@ -228,7 +228,13 @@ trixie userspace. No gaming stack, but several transferable parts:
       resume came from the RTC alarm each time. Shipped OFF by default (v0.7.1+): an empty file `sleep` on the boot partition (or
       `sxx-sleep on`) turns it on (`/run/systemd/sleep.conf.d/50-sxx.conf`: AllowSuspend=yes, freeze; logind: short power press suspends, long
       press powers off; a 3 s power-key hold-off after resume so the waking press does not sleep it again). `sxx-sleep test [secs]` sleeps
-      through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). Next: someone presses the power button
+      through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). OPEN PROBLEM (2026-11-27 05:20): a 30-minute test (`sxx-sleep test 1800`, RTC alarm +1800 s) on the RG40XX-H,
+      running standalone from slot 1 on battery over Wi-Fi, never came back: no ping or SSH 25 minutes after the alarm, while 40 s tests on the
+      same unit (two) and on the RG28XX (four, including Steam's own Sleep and a game in front) all woke on time and reconnected in about 8 s.
+      Candidates: the long RTC alarm did not fire (try +120, +300, +600 on the RG28XX over adb, where a failure is visible), the Wi-Fi chip
+      lost power over a long sleep and the 18 s rebind retry gave up (the unit has no USB link to look), or something on resume that a long sleep
+      exposes (reach-guard, thermals, the watchdog). Needs the handheld's serial console or a USB cable on the PC, and a power-button press
+      to get it back. Until a long sleep wakes reliably the feature stays opt-in. Next: someone presses the power button
       during `sxx-sleep test` on each handheld; if it reports `power-button`, make sleep the default. Then: battery drain while asleep (Handtop
       reports 5-6 %/hour; measure on battery, both handhelds were on USB power), mute the DAC before sleeping and unmute after, Wi-Fi
       reconnect time on the RG40XX-H after resume, what Steam's own idle-sleep timer does, and rtc1's clock (set it from system time at boot). M
