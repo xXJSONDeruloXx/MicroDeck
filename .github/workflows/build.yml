@@ -48,7 +48,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: ROCKNIX kernel, modules and firmware
-        run: bash tools/fetch-rocknix.sh
+        run: for i in 1 2 3 4; do bash tools/fetch-rocknix.sh && exit 0; echo "download failed, retrying"; sleep 30; done; exit 1
       - uses: actions/download-artifact@v4
         with: {name: kernel, path: out/dl-kernel}
       - uses: actions/download-artifact@v4

@@ -19,7 +19,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential bc bison flex libssl-dev libelf-dev rsync xz-utils python3 git cpio kmod patch curl ccache
       - if: steps.out.outputs.cache-hit != 'true'
         name: ROCKNIX kernel, modules and firmware (inputs for the built-in initramfs and firmware)
-        run: bash tools/fetch-rocknix.sh
+        run: for i in 1 2 3 4; do bash tools/fetch-rocknix.sh && exit 0; echo "download failed, retrying"; sleep 30; done; exit 1
       - if: steps.out.outputs.cache-hit != 'true'
         run: bash kernel/build.sh
       - run: tar -C out/kernel -cf - . | xz -T0 -3 > out/kernel.tar.xz
