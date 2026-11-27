@@ -43,7 +43,7 @@ check() {
 
 apply() {
   local out tag url shaurl flag want got bat=/sys/class/power_supply/battery
-  # the install is ten minutes of writes that must not be cut short: not on a low battery without the charger
+  # the install is minutes of writes that must not be cut short: not on a low battery without the charger
   if [ "$(cat $bat/status 2>/dev/null)" = Discharging ] && [ "$(cat $bat/capacity 2>/dev/null || echo 100)" -lt 40 ]; then
     say "battery is below 40 % and not charging: plug in the charger first"; return 1
   fi
@@ -86,7 +86,7 @@ apply() {
   rm -f "$part" "$STATE/boot.img"
   sync
   echo "$tag" > "$STATE/pending.tmp" && sync && mv "$STATE/pending.tmp" "$STATE/pending" && sync
-  say "$tag staged; it installs at the next restart (about 10 minutes, do not power off)"
+  say "$tag staged; it installs at the next restart (several minutes, do not power off)"
 }
 
 # Steam kills a steamos-update check after about five minutes, and a 340 MB download over this Wi-Fi can take longer: the
