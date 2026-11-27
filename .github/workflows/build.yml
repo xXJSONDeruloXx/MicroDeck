@@ -131,6 +131,31 @@ jobs:
             out/uboot/fel-reset.bin
             out/uboot/fel-boot-rg28xx.bin
 
+  # The latest published release boots in the virtual device and is updated in place to this build, by its own updater and initramfs.
+  upgrade:
+    needs: image
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: image-rg40xx, path: out}
+      - uses: actions/cache@v4
+        with:
+          path: cache/qemu/Image
+          key: qemu-kernel-${{ hashFiles('tools/qemu/ci.sh') }}
+      - name: previous release
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out/prev
+          if gh release download --repo "$GITHUB_REPOSITORY" -p 'steamos-rg40xx.img.xz' -D out/prev; then echo "found=1" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.prev.outputs.found == '1'
+        run: bash tools/qemu/ci.sh out/steamos-rg40xx.img.xz out/prev/steamos-rg40xx.img.xz
+        env:
+          EXPECT_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+
   vm-boot:
     needs: image
     runs-on: ubuntu-24.04-arm

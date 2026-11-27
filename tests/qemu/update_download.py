@@ -84,7 +84,8 @@ def main():
     check(vm, "/usr/local/sbin/sxx-update apply 2>&1 | tail -3", "staged", "download, checksum, unpack and stage", timeout=3000)
     check(vm, "cat /home/.sxx/update/pending; ls /home/.sxx/update/boot | head -3", TAG, "release is staged with its boot files")
     vm.reboot(timeout=3000)
-    check(vm, "cat /etc/sxx-release", "dev", "the new image is running (its own release stamp)")
+    # the new image carries its own stamp: the tag on a release build, "dev" otherwise
+    check(vm, "cat /etc/sxx-release", os.environ.get("EXPECT_RELEASE", "dev"), "the new image is running (its own release stamp)")
     check(vm, "cat /home/.sxx/update/installed/tag; ls /home/.sxx/update", "installed", "install recorded, staging cleaned up")
     server.shutdown()
     print("download update checks passed")

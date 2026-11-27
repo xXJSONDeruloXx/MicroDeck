@@ -1,10 +1,13 @@
 #!/bin/bash
 # Boots a built image in QEMU on a CI runner (ubuntu-24.04-arm) and runs the boot smoke test. Natively builds the generic kernel
 # (cached by the workflow) so no cross compiler is needed.
-#   tools/qemu/ci.sh out/steamos-rg40xx.img.xz
+#   tools/qemu/ci.sh out/steamos-rg40xx.img.xz                       boot smoke test of that image
+#   tools/qemu/ci.sh out/steamos-rg40xx.img.xz <previous.img.xz>    boot the PREVIOUS release and update it in place to the first image
+#                                                                   (the old release's own updater and initramfs do the install, as for a user)
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-img=${1:?usage: tools/qemu/ci.sh image.img.xz}
+img=${1:?usage: tools/qemu/ci.sh image.img.xz [previous-release.img.xz]}
+base=${2:-$img}   # the disk the VM boots from
 sudo apt-get update -qq
 sudo apt-get install -y -qq qemu-system-arm mtools build-essential bc bison flex libssl-dev libelf-dev xz-utils curl cpio kmod python3 openssh-client >/dev/null
 mkdir -p out/qemu cache/qemu
@@ -20,7 +23,7 @@ if [ ! -f cache/qemu/Image ]; then
   cp /tmp/linux/arch/arm64/boot/Image cache/qemu/Image
 fi
 cp cache/qemu/Image out/qemu/Image
-xz -dc "$img" > out/qemu/disk.img
+xz -dc "$base" > out/qemu/disk.img
 truncate -s 12G out/qemu/disk.img
 mcopy -n -i out/qemu/disk.img@@16M ::initrd.cpio.gz out/qemu/initrd.cpio.gz
 mkdir -p secrets
@@ -31,6 +34,10 @@ cp out/qemu/disk.img out/qemu/disk.base.img
 bash tools/qemu/run.sh > out/qemu/qemu.out 2>&1 &
 trap 'kill %1 2>/dev/null || true' EXIT
 rc=0
-python3 tests/qemu/boot_smoke.py || rc=$?
+if [ -n "${2:-}" ]; then
+  python3 tests/qemu/update_download.py "$img" || rc=$?
+else
+  python3 tests/qemu/boot_smoke.py || rc=$?
+fi
 echo "== last serial lines"; tail -n 40 out/qemu/serial.log | tr -d '\r'
 exit $rc
