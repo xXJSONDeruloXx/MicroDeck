@@ -1,5 +1,6 @@
 #!/bin/bash
 # X session client, run by startx as the steam user: window manager, then Steam.
+/usr/local/bin/sxx-rotate
 xset s off -dpms 2>/dev/null
 # Mirrors SteamOS's gamescope-session (--hide-cursor-delay 3000): the cursor starts hidden, shows when
 # something moves the pointer (Steam's guide + right stick chord), and hides again after 3 s idle.

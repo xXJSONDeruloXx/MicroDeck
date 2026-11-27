@@ -16,8 +16,9 @@ if ! "$FEL" ver 2>/dev/null | grep -q AWUSBFEX; then
   step "waiting for muOS on adb"
   until adb -s "$MUOS" get-state 2>/dev/null | grep -q device; do sleep 3; done
   step "rebooting muOS into FEL"
-  adb -s "$MUOS" shell 'mountpoint -q /opt/steamrg || mount -o loop,noatime /mnt/mmc/steamrg.img /opt/steamrg; sync;
-    chroot /opt/steamrg/root python3 -c "import ctypes,os; os.sync(); ctypes.CDLL(None).syscall(142, 0xfee1dead, 672274793, 0xA1B2C3D4, b\"efex\")"' >/dev/null 2>&1
+  # the RG40XX-H's muOS has no python of its own (a Debian chroot image supplies it); the RG28XX's muOS has
+  adb -s "$MUOS" shell '[ -f /mnt/mmc/steamrg.img ] && { mountpoint -q /opt/steamrg || mount -o loop,noatime /mnt/mmc/steamrg.img /opt/steamrg; PY="chroot /opt/steamrg/root python3"; } || PY=python3; sync;
+    $PY -c "import ctypes,os; os.sync(); ctypes.CDLL(None).syscall(142, 0xfee1dead, 672274793, 0xA1B2C3D4, b\"efex\")"' >/dev/null 2>&1
   for i in $(seq 1 40); do "$FEL" ver 2>/dev/null | grep -q AWUSBFEX && break; sleep 2; done
 fi
 "$FEL" ver | grep AWUSBFEX || { step "FEL did not appear"; exit 1; }

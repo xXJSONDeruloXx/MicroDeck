@@ -223,11 +223,18 @@ def guest_environment(fex, env):
     return env
 
 
+# Games whose Steam launch entry is a Qt launcher window that needs a pointer: start the game binary the launcher would exec.
+SKIP_LAUNCHER = {"219150": {"hotline_launcher": "Hotline"}}
+
+
 def run(command):
     fex = prepare()
     if fex is None:
         return 126
     program = command[0]
+    skip = SKIP_LAUNCHER.get(os.environ.get("SteamAppId", ""), {}).get(os.path.basename(program))
+    if skip:
+        program = os.path.join(os.path.dirname(program), skip)
     say("running %s under FEX (root %s)" % (program, os.path.basename(fex["platform"])))
     os.execve(fex["fex"], [fex["fex"], program] + command[1:], guest_environment(fex, os.environ))
 

@@ -28,6 +28,6 @@ cat /w/uboot/fel-debug.config /w/uboot/$variant.config >> .config
 make -s CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
 grep -E 'SUNXI_DRAM_H616_LP|SLOT_EXTRA|BOOTCOMMAND=' .config
 make -s -j\$(nproc) CROSS_COMPILE=aarch64-linux-gnu- BL31=/src/tfa/build/sun50i_h616/release/bl31.bin SCP=/dev/null
-mkdir -p /w/out/uboot && cp u-boot-sunxi-with-spl.bin /w/out/uboot/$variant.bin
-ls -la /w/out/uboot/$variant.bin
+mkdir -p /w/out/uboot && cp u-boot-sunxi-with-spl.bin /w/out/uboot/$variant${UBOOT_SUFFIX:-}.bin
+ls -la /w/out/uboot/$variant${UBOOT_SUFFIX:-}.bin
 "

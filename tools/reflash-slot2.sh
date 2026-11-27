@@ -29,4 +29,4 @@ step "writing /dev/mmcblk1"
 # muOS keeps slot 2 mounted: make it read-only first, or its writeback corrupts the new image
 adb -s "$MUOS" shell 'mount -o remount,ro /mnt/sdcard 2>/dev/null; umount /mnt/sdcard 2>/dev/null; gunzip -c /mnt/mmc/steamos.img.gz | dd of=/dev/mmcblk1 bs=4M conv=fsync 2>&1 | tail -2; sync; rm -f /mnt/mmc/steamos.img.gz'
 step "booting the new system through FEL"
-tools/fel-boot.sh
+tools/fel-boot.sh ${UBOOT:+"$UBOOT"}
