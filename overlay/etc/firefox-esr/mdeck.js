@@ -8,3 +8,7 @@ pref("browser.shell.checkDefaultBrowser", false);
 pref("browser.aboutwelcome.enabled", false);
 pref("datareporting.policy.dataSubmissionEnabled", false);
 pref("toolkit.telemetry.enabled", false);
+// Fission would give every site its own process; one shared web process plus the tab being used is what 1 GB can carry.
+pref("fission.webContentIsolationStrategy", 0);
+pref("dom.ipc.processCount.webIsolated", 1);
+pref("dom.ipc.processPrelaunch.enabled", false);
