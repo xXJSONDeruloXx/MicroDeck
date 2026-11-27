@@ -15,6 +15,23 @@ Use the VM first for anything that is not hardware: updater install/rollback/rec
 partition, systemd units, scripts. One-time setup: `tools/vm.sh setup <image.img.xz>` (a CI image from the `image` artifact). The
 unit tests and syntax checks run anywhere: `tools/ci-checks.sh`. Docker and QEMU are installed on the dev PC.
 
+## More than one handheld (RG40XX-H and RG28XX)
+Both are named `rg40xx` (hostname, Steam client), so tools that look for "the device" can pick the wrong one.
+- `tools/dev.sh`: `DEV_SERIAL=<adb serial>` picks one by USB; `DEV_VIA=ssh DEV_HOST=<ip>` reaches one over the network (adb is skipped).
+  It also keeps its habit of preferring adb, so SSH-only needs `DEV_VIA=ssh`. Never `pkill -f` a pattern inside a command run through it.
+- RG28XX: muOS in slot 1 has adb serial `ac001071d3c287d1e12`; the OS shows as `33806c00a44025d8`. Boot it with
+  `MUOS_SERIAL=ac001071d3c287d1e12 tools/fel-boot.sh out/uboot/fel-boot-rg28xx.bin` (FEL needs that U-Boot: its RAM values differ).
+  It has no Wi-Fi: it answers at 169.254.58.58 over the USB cable and gets internet from `tools/win-share-usb.ps1` (Windows ICS, needs an
+  elevated PowerShell, so the user must click the UAC prompt). Its panel is 480x640: screenshots from `tools/dev.sh shot` are the physical
+  plane, so the picture is turned 90 degrees (Steam's top bar runs down the left edge); that is correct.
+- RG40XX-H: may run standalone from the card in slot 1 (no muOS, no FEL; reach it by SSH over Wi-Fi). Then only the updater, SSH and adb
+  (when plugged in) reach it, and a reset reboots the same OS.
+- Releases carry one image per device; `sxx-update` downloads `steamos-<device>.img.xz` by `/etc/sxx-device`. A device on an old updater
+  (v0.6.0 and before) fetches the RG40XX-H image whatever it is: put the current `sxx-update` on a hand-patched unit before updating it.
+- After a hard reset Steam shows "Verifying installation..." for a few minutes; the UI is not up until it finishes.
+- Install a game or tool without touching the pad: `SteamClient.URL.ExecuteSteamURL('steam://install/<appid>')` through `sxx eval`, then click
+  the dialog's Install button through DevTools (a SteamOS compatibility note comes first for tools). Steam must be online for that.
+
 ## Device rules
 - The Steam account is shared with other agents and devices. A game started elsewhere ends yours, and online launches can stall at
   "Synchronizing cloud" or "SynchronizingControllerConfig". Use Steam's offline mode for tests:
