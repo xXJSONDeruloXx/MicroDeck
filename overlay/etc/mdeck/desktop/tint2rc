@@ -55,7 +55,7 @@ execp_font_color = #f0b030 100
 execp_padding = 6 2 4
 
 execp = new
-execp_command = echo "$(cat /sys/class/power_supply/battery/capacity)%"
+execp_command = sh -c 'c=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null) && echo "$c%"'
 execp_interval = 30
 execp_font = DejaVu Sans 8
 execp_font_color = #f0f0f0 100

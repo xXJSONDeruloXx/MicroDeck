@@ -38,6 +38,7 @@ if [ -n "${2:-}" ]; then
   python3 tests/qemu/update_download.py "$img" || rc=$?
 else
   python3 tests/qemu/boot_smoke.py || rc=$?
+  python3 tests/qemu/desktop_smoke.py || rc=$?
 fi
 echo "== last serial lines"; tail -n 40 out/qemu/serial.log | tr -d '\r'
 exit $rc
