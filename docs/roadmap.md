@@ -114,7 +114,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       `sxx-focus` resize an oversized window to the root size and see whether the game follows (SDL/FNA windows usually do not); (b) pad
       input in FEX games (Steam Input's virtual pad through FEX; only the keyboard was checked); (c) the launcher windows some games
       show first (Hotline Miami's Qt launcher needs a pointer): a per-game launch option that skips it; (d) Steam installing the FEX tool
-      and Linux Runtime 4.0 by itself (`require_tool_appid` is in the tool's manifest, untested). 
+      and Linux Runtime 4.0 by itself (`require_tool_appid` in the manifest does NOT work: Steam then wraps our tool in the required tool's whole chain, SLR 4.0 and Valve's FEX app, and that chain fails without SteamOS's `fex-mesa`; so the tool has no dependency and the user installs both once). 
 - [~] Never livelock on memory: earlyoom (games first), MGLRU `min_ttl_ms`, PSI game kill in the
       memory-locked `reach-guard` (plus a real sshd probe). Verify with a deliberate memory hog. S
 - [x] Game windows on top, Steam button menu over games and back: `GAMESCOPE_WAYLAND_DISPLAY` turns on
