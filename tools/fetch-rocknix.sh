@@ -10,8 +10,8 @@ name=ROCKNIX-H700.aarch64-$REL-$RAM.img.gz
 url=https://github.com/ROCKNIX/distribution/releases/download/$REL/$name
 mkdir -p cache
 if [ ! -f cache/rocknix.img ]; then
-  curl -fL --retry 6 --retry-delay 10 --retry-all-errors -o cache/$name "$url"
-  want=$(curl -fsSL --retry 6 --retry-delay 10 --retry-all-errors "$url.sha256" | cut -d' ' -f1)
+  curl -fL -o cache/$name "$url"
+  want=$(curl -fsSL "$url.sha256" | cut -d' ' -f1)
   echo "$want  cache/$name" | sha256sum -c -
   gzip -dc cache/$name > cache/rocknix.img
 fi
