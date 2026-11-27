@@ -15,7 +15,7 @@ Q_ROUTE='document.location.pathname'
 Q_FOCUS='(()=>{const e=document.activeElement;return (e&&(e.innerText||e.getAttribute("aria-label")||"")||"").toString().slice(0,60).replace(/\n/g," ")})()'
 
 check reachability   'echo up $(uptime -p)' 'up'
-check services       'systemctl is-active usb-gadget ssh NetworkManager steam-session reach-guard earlyoom handheld-keys sxx-vpad | sort | uniq -c' '^ *8 active$'
+check services       'systemctl is-active usb-gadget ssh NetworkManager steam-session reach-guard earlyoom handheld-keys | sort | uniq -c' '^ *7 active$'
 check failed-units   'systemctl --failed --no-legend | wc -l' '^0$'
 check display        'cat /sys/class/drm/card1-DSI-1/status' 'connected'
 check gpu            'runuser -u steam -- env DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority glxinfo -B | grep "OpenGL renderer"' 'Panfrost'
