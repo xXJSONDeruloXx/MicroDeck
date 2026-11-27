@@ -45,6 +45,9 @@ Installed v0.7.x updaters cannot see v0.8.0 or later (the project moved): write 
 
 - **Works:** Big Picture, the built-in pad as a Steam Deck controller, Wi-Fi, Bluetooth, audio, brightness and volume, games in front
   with the Steam button menu over them, in-place updates with rollback.
+- **Desktop mode:** in Steam, Power > Switch to Desktop gives a small desktop with Firefox, AbiWord, Gnumeric, a text editor, files and a
+  terminal, all driven from the pad (the d-pad or sticks move the pointer, A and B click, Start opens the menu, X opens an on-screen
+  keyboard). The Steam button on the panel, or holding Start, returns to Steam. One browser tab at a time fits in 1 GB.
 - **Sleep** is off by default. It works, but waking with the power button is not confirmed on every unit. Turn it on with an empty
   file named `sleep` on the `MICRODECK` partition (or `mdeck-sleep on`).
 - **Slow:** Direct3D 9 runs on the GPU, Direct3D 10/11 on the CPU. See [docs/games.md](docs/games.md) for what runs.
