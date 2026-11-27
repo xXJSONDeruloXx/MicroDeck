@@ -63,7 +63,33 @@ def sxx(js):
 FEX_TOOL = "sxx-fex"
 # Steam's own tools and runtimes: never games
 NOT_GAMES = {"228980", "1070560", "1391110", "1628350", "3127680", "4183110", "4185400", "4427310", "4628740"}
-PREREQUISITES = ("3127680", "4183110")  # Valve's FEX tool and Steam Linux Runtime 4.0, which sxx-fex runs on
+PREREQUISITES = {"3127680": "FEX", "4183110": "Steam Linux Runtime 4.0"}  # Valve's FEX tool and the x86 runtime sxx-fex runs on
+ASK_EVERY = 120   # seconds between install requests for one tool
+ASK_LIMIT = 6     # requests per tool per run: Steam in offline mode or still starting ignores them
+
+
+def sxx_ui(js):
+    """Evaluate in Steam's Big Picture window (where install dialogs appear)."""
+    return subprocess.run(["sxx", "eval", "-t", "Steam Big Picture Mode", js], capture_output=True, text=True, timeout=30)
+
+
+def press_install(name):
+    """Press Install on Steam's install dialog for `name`: first a SteamOS compatibility note, then the install dialog itself."""
+    js = ("(function(n){var t=document.body.innerText;if(t.indexOf(n)<0||t.indexOf('Cancel')<0)return '';"
+          "var b=[...document.querySelectorAll('[role=button],button,div')].filter(function(e){return e.children.length==0&&e.innerText==='Install'});"
+          "if(!b.length)return '';b[b.length-1].click();return 'clicked'})(%s)" % json.dumps(name))
+    clicked = 0
+    for _ in range(14):
+        time.sleep(2.5)
+        try:
+            r = sxx_ui(js)
+        except Exception:
+            continue
+        if "clicked" in r.stdout:
+            clicked += 1
+            if clicked == 2:
+                return True
+    return clicked > 0
 
 
 def elf_machine(path):
@@ -148,6 +174,7 @@ def main():
     except (OSError, ValueError):
         handled = set()
     asked = {}
+    asked_pre = {}   # tool -> (time of the last request, requests so far)
     while True:
         try:
             mapping = read_mapping(open(CONFIG, encoding="utf-8", errors="replace").read())
@@ -159,7 +186,18 @@ def main():
                     handled.add(app)
                     print("sxx-compat-default: app %s moved from %s to %s" % (app, mapping[app], mine), flush=True)
             # Linux-only x86 games: no mapping means Steam runs the Linux build natively, which cannot execute here
-            for app, folder in installed_apps():
+            games = list(installed_apps())
+            # sxx-fex needs Valve's FEX tool and the x86 runtime: ask for them while a Linux x86 game is installed, whatever its mapping
+            if any(is_linux_x86_only(folder) for app, folder in games):
+                for pre, name in PREREQUISITES.items():
+                    if tool_installed(pre) or time.time() - asked_pre.get(pre, (0, 0))[0] < ASK_EVERY                             or asked_pre.get(pre, (0, 0))[1] >= ASK_LIMIT:
+                        continue
+                    asked_pre[pre] = (time.time(), asked_pre.get(pre, (0, 0))[1] + 1)
+                    sxx("SteamClient.URL.ExecuteSteamURL('steam://install/%s')" % pre)
+                    print("sxx-compat-default: asked Steam to install tool %s (%s) for Linux x86 games" % (pre, name), flush=True)
+                    if press_install(name):
+                        print("sxx-compat-default: pressed Install for %s" % name, flush=True)
+            for app, folder in games:
                 key = "fex:" + app
                 if key in handled:
                     continue
@@ -169,11 +207,6 @@ def main():
                     continue
                 if app in mapping or not is_linux_x86_only(folder):
                     continue
-                for pre in PREREQUISITES:
-                    if not tool_installed(pre) and "pre:" + pre not in handled:
-                        sxx("SteamClient.URL.ExecuteSteamURL('steam://install/%s')" % pre)
-                        handled.add("pre:" + pre)
-                        print("sxx-compat-default: asked Steam to install tool %s for Linux x86 games" % pre, flush=True)
                 # Steam ignores a tool it has not finished registering (about 40 s after it starts) and applies a mapping a
                 # minute or so after it is asked: asked again every 90 s until it shows up in config.vdf
                 if time.time() - asked.get(app, 0) < 90:

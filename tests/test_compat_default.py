@@ -76,5 +76,36 @@ class CompatDefaultTest(unittest.TestCase):
         self.assertEqual(self.mod.read_mapping(open(self.mod.CONFIG).read())["219150"], "proton-experimental")
 
 
+class PressInstallTest(unittest.TestCase):
+    """The daemon presses Install on Steam's dialog for a missing tool: a SteamOS note first, then the install dialog."""
+
+    def setUp(self):
+        self.mod = helpers.load("compat_default", "usr", "local", "bin", "sxx-compat-default")
+        self.calls = []
+        self.mod.time.sleep = lambda s: None
+
+    def stub(self, replies):
+        class R:
+            def __init__(self, out):
+                self.stdout = out
+        it = iter(replies)
+
+        def fake(js):
+            self.calls.append(js)
+            return R(next(it, ""))
+        self.mod.sxx_ui = fake
+
+    def test_two_dialogs_are_confirmed_and_the_tool_name_is_in_the_script(self):
+        self.stub(["", "clicked", "", "clicked"])
+        self.assertTrue(self.mod.press_install("Steam Linux Runtime 4.0"))
+        self.assertIn('"Steam Linux Runtime 4.0"', self.calls[0])
+        self.assertEqual(len(self.calls), 4)  # stops after the second click
+
+    def test_no_dialog_means_nothing_was_pressed(self):
+        self.stub([])
+        self.assertFalse(self.mod.press_install("FEX"))
+        self.assertEqual(len(self.calls), 14)
+
+
 if __name__ == "__main__":
     unittest.main()
