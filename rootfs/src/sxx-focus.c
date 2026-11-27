@@ -144,6 +144,12 @@ static void fit_screen(struct win *pick) {
       if (verbose) fprintf(stderr, "sxx-focus: %s\n", cmd);
       if (system(cmd) == 0) { fitted = pick->w; fitted_w = wa.width; fitted_h = wa.height; }
     }
+    // Games centre their window on the screen they saw (SDL does it after it maps): put it back at the origin whenever it drifts
+    int rx = 0, ry = 0; Window child;
+    if (XTranslateCoordinates(d, pick->w, root, 0, 0, &rx, &ry, &child) && (rx != 0 || ry != 0)) {
+      if (verbose) fprintf(stderr, "sxx-focus: moving 0x%lx from %d,%d to the origin\n", pick->w, rx, ry);
+      XMoveWindow(d, pick->w, 0, 0);
+    }
     return;
   }
   if (fitted) {
@@ -222,16 +228,15 @@ static void sync_focus(void) {
 
 int main(int argc, char **argv) {
   verbose = argc > 1 && !strcmp(argv[1], "-v");
-  if (!(d = XOpenDisplay(NULL))) { fprintf(stderr, "sxx-focus: cannot open display\n"); return 1; }
-  XSetErrorHandler(x_error);
-  root = DefaultRootWindow(d);
   if (getenv("SXX_FIT")) fit_cmd = getenv("SXX_FIT");
-  {  // a crashed run may have left the screen scaled
+  {  // a crashed run may have left the screen scaled; Xlib reads the screen size once, when it connects, so reset before that
     char cmd[256];
     snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
     if (system(cmd) != 0) fprintf(stderr, "sxx-focus: %s failed\n", cmd);
   }
-  XSync(d, False);
+  if (!(d = XOpenDisplay(NULL))) { fprintf(stderr, "sxx-focus: cannot open display\n"); return 1; }
+  XSetErrorHandler(x_error);
+  root = DefaultRootWindow(d);
   base_w = DisplayWidth(d, DefaultScreen(d)); base_h = DisplayHeight(d, DefaultScreen(d));
 #define A(v, s) v = XInternAtom(d, s, False)
   A(a_client_list, "_NET_CLIENT_LIST"); A(a_active, "_NET_ACTIVE_WINDOW"); A(a_steam_game, "STEAM_GAME");
