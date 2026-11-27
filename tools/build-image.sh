@@ -61,6 +61,7 @@ cat > $work/boot/wifi.txt.example <<EOF
 # The first start downloads Steam (about 1 GB), so the handheld needs a connection.
 ssid=YourNetworkName
 psk=YourPassword
+# Optional: band=a joins 5 GHz only (usually much faster than 2.4 GHz); band=bg joins 2.4 GHz only.
 EOF
 cat > $work/boot/authorized_keys.example <<EOF
 # Optional: for SSH access, put your public key(s) here, one per line (ssh-ed25519 AAAA... you@host), and rename this

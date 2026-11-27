@@ -2,6 +2,7 @@
 # Joins the Wi-Fi network named in wifi.txt on the boot partition (FAT, readable from any PC):
 #   ssid=MyNetwork
 #   psk=my password          (leave out for an open network)
+#   band=a                   (optional: a = 5 GHz only, bg = 2.4 GHz only; faster downloads on most routers)
 # Runs at every boot after NetworkManager; imports again when the file changes.
 f=/boot/firmware/wifi.txt
 state=/var/lib/sxx/wifi.sha
@@ -14,13 +15,15 @@ sum=$(sha256sum "$f" | cut -d' ' -f1)
 [ "$(cat "$state" 2>/dev/null)" = "$sum" ] && exit 0
 ssid=$(sed -n 's/^ssid=//p' "$f" | tr -d '\r' | head -1)
 psk=$(sed -n 's/^psk=//p' "$f" | tr -d '\r' | head -1)
+band=$(sed -n 's/^band=//p' "$f" | tr -d '\r' | head -1)
+case "$band" in a|bg) ;; *) band= ;; esac
 [ -n "$ssid" ] || { echo "sxx-wifi-import: no ssid= line in $f"; exit 1; }
 for i in $(seq 1 30); do nmcli -t -f DEVICE dev | grep -qx wlan0 && break; sleep 2; done
 nmcli connection delete sxx-wifi >/dev/null 2>&1
 if [ -n "$psk" ]; then
-  nmcli connection add type wifi ifname wlan0 con-name sxx-wifi ssid "$ssid" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$psk" connection.autoconnect yes >/dev/null
+  nmcli connection add type wifi ifname wlan0 con-name sxx-wifi ssid "$ssid" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$psk" connection.autoconnect yes ${band:+802-11-wireless.band "$band"} >/dev/null
 else
-  nmcli connection add type wifi ifname wlan0 con-name sxx-wifi ssid "$ssid" connection.autoconnect yes >/dev/null
+  nmcli connection add type wifi ifname wlan0 con-name sxx-wifi ssid "$ssid" connection.autoconnect yes ${band:+802-11-wireless.band "$band"} >/dev/null
 fi || exit 1
 mkdir -p /var/lib/sxx && echo "$sum" > "$state"
 nmcli connection up sxx-wifi >/dev/null 2>&1 || true
