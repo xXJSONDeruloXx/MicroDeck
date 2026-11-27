@@ -140,19 +140,15 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [ ] Steam UI speed: CEF on the GPU (`CEF_GPU=1`, Panfrost GLES) vs software; webhelper memory. M
 - [ ] Desktop mode via `steamos-session-select desktop` (optional, lightweight). M
 
-- [ ] Low priority UI glitch: a small gray square with a monitor-and-waves ("cast") glyph appears at the top-left of Steam's launch
-      screen controller diagram (the "This game will use the Official Layout" screen), overlapping the D-pad icon; it is not on
-      the interstitial screens. Not Chromium's cast button: it is Steam's own element. Hypothesis: Steam's connection-type badge
-      for our virtual Deck controller (a USB/IP `vhci_hcd` device, 28de:1205) reads as "remote". Next: catch the element
-      (hold the launch screen open, `document.elementsFromPoint` at CSS px = screen px x 1.47) and see what decides the glyph;
-      the fix, if any, belongs in how InputPlumber presents the device (its sysfs/HID bus attributes), not in Steam. S
-      2026-11-27 findings (RG28XX, USB network, offline): Chromium's `RemotePlayback` is not supported in this CEF ("Availability
-      monitoring is not supported on this device"), so Chromium's own overlay cast button is ruled out. Steam's Deck diagrams
-      (`steamui/movies/steamdeck_*.webm`) and generic `<video>` elements render with no glyph here, with or without `controls`. The
-      interstitial never appears for Geometry Wars or Hotline Miami offline, only for games with an official layout when online (seen
-      on the RG40XX-H with Sonic Mania): the next attempt has to run on the RG40XX-H over Wi-Fi with such a game, catching
-      `[class*=ControlOverviewContainer]` (the component, in `steamui/sp.js`, renders an `<img>` or `<video>` plus a header) and its
-      neighbours, since the glyph sits exactly at the top-left corner of that box.
+- [x] The gray "cast" square over the launch screen's controller diagram (and other videos) is fixed (2026-11-27). It is Chromium's overlay
+      cast button, drawn at the top-left of every `<video>` that can cast: the launch screen plays `steamui/movies/steamdeck_*.webm`.
+      Found on the RG40XX-H by catching the screen (text "This game will use the Official Layout"; Steam's class names are hashed) and
+      grabbing the plane with `kmsgrab`. `--disable-blink-features=RemotePlayback` does not remove it and neither does setting the
+      `disableRemotePlayback` property (the button reads the content attribute). `sxx-ui-fixes.service` (`sxx ui-fixes`) keeps a DevTools
+      connection per Steam UI page and sets `disableremoteplayback` on each `<video>` as it is added (a MutationObserver, registered with
+      `Page.addScriptToEvaluateOnNewDocument` and run once on the current document). Checked with Sonic Mania. It needs `CDP_PORT` in
+      `/etc/steam-session.conf` (the default). Related: it is why the glyph only showed on handhelds that reached the screen online; the screen
+      appears for games with an official layout.
 
 ## 4. Hardware
 - [ ] Sleep/wake: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM

@@ -7,6 +7,7 @@
                                    a b x y up down left right lb rb lt rt start select guide ls rs,
                                    hold:BTN:MS, wait:MS, stick:L|R:X:Y (-1..1, released after 200 ms)
   sxx vpad-daemon                  the virtual pad itself (run as root by sxx-vpad.service)
+  sxx ui-fixes                     keeps small fixes applied inside Steam's UI pages (sxx-ui-fixes.service)
 
 The DevTools WebSocket client and CDP evaluation are adapted from DroidDeck's droiddeck-agent.
 """
@@ -137,6 +138,65 @@ def cdp_eval(expression, want="SharedJSContext", timeout=20):
             return res.get("result", {}).get("value")
     finally:
         ws.s.close()
+
+
+# --- fixes inside Steam's UI pages ------------------------------------------------------------
+
+# Chromium draws a gray "cast" button over every <video> that can cast, and Steam's launch screen plays one (the controller
+# diagram), so it sat on top of the diagram. The attribute switches that button off; --disable-blink-features=RemotePlayback
+# does not, and Steam owns the <video> elements, so the attribute is set on each one as it is added (the content attribute itself:
+# setting the disableRemotePlayback property alone leaves the button).
+UI_FIXES_JS = """(function(){
+  if (window.__sxxUiFixes) return;
+  window.__sxxUiFixes = 1;
+  function fix(n) {
+    if (n.nodeType !== 1) return;
+    if (n.tagName === "VIDEO") n.setAttribute("disableremoteplayback", "");
+    else if (n.querySelectorAll) n.querySelectorAll("video").forEach(function (v) { v.setAttribute("disableremoteplayback", ""); });
+  }
+  new MutationObserver(function (ms) {
+    for (var i = 0; i < ms.length; i++) for (var j = 0; j < ms[i].addedNodes.length; j++) fix(ms[i].addedNodes[j]);
+  }).observe(document, {childList: true, subtree: true});
+  document.querySelectorAll("video").forEach(fix);
+})()"""
+
+
+def ui_fixes_session(target):
+    """One DevTools connection per page: scripts registered for new documents last only as long as it stays open."""
+    ws = WebSocket(target["webSocketDebuggerUrl"], 30)
+    try:
+        ws.send(json.dumps({"id": 1, "method": "Page.addScriptToEvaluateOnNewDocument", "params": {"source": UI_FIXES_JS}}))
+        ws.send(json.dumps({"id": 2, "method": "Runtime.evaluate", "params": {"expression": UI_FIXES_JS}}))
+        ws.s.settimeout(None)
+        while True:
+            ws.recv()
+    finally:
+        ws.s.close()
+
+
+def ui_fixes():
+    import threading
+    if not conf("CDP_PORT").isdigit():
+        return
+    active = set()
+
+    def run(t):
+        try:
+            ui_fixes_session(t)
+        except (OSError, ValueError):
+            pass
+        finally:
+            active.discard(t["id"])
+
+    while True:
+        try:
+            for t in targets():
+                if t.get("webSocketDebuggerUrl") and t.get("type") == "page" and t["id"] not in active:
+                    active.add(t["id"])
+                    threading.Thread(target=run, args=(t,), daemon=True).start()
+        except (OSError, ValueError, SystemExit):
+            pass
+        time.sleep(3)
 
 
 # --- virtual test pad -------------------------------------------------------------------------
@@ -275,6 +335,8 @@ def main(argv):
         pad(args)
     elif cmd == "vpad-daemon":
         vpad_daemon()
+    elif cmd == "ui-fixes":
+        ui_fixes()
     else:
         raise SystemExit(__doc__)
 
