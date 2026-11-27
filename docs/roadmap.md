@@ -274,6 +274,9 @@ trixie userspace. No gaming stack, but several transferable parts:
 - [x] Upgrade test in CI (2026-11-27, job `upgrade`): the latest published release boots in the virtual device and is updated in place to the
       build under test, by the old release's own updater and initramfs (`tools/qemu/ci.sh <new> <previous>`, `tests/qemu/update_download.py`;
       first run 17 min including the QEMU kernel build, cached after).
+      Since the MicroDeck rename it only runs once a release named `microdeck-<device>.img.xz` exists: a pre-rename release cannot update to a
+      renamed build (old updater feed gone, old initramfs looks for the old `steamroot` label and the QEMU test, which boots with a fixed initrd, loops
+      forever on it; a real card recovers on its next boot because the install also replaces the initrd).
 
 ## Other projects reviewed (2026-11-26)
 - **Allium OS** (goweiwen/Allium): a Rust launcher for the Miyoo Mini family, not H700. Useful shape: a small always-on daemon
