@@ -12,8 +12,11 @@ HOST=${DEV_HOST:-rg40xx.local}
 PORT=${DEV_PORT:-22}
 SSH=(ssh -p "$PORT" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
 
+# Two handhelds can be online at once (both are named rg40xx): DEV_SERIAL=<adb serial> picks one by USB, DEV_VIA=ssh with DEV_HOST=<ip> the other over the network.
 adb_serial() {
   [ "${DEV_TARGET:-}" = vm ] && return 0   # the QEMU virtual device (tools/vm.sh) is reached over SSH only
+  [ "${DEV_VIA:-}" = ssh ] && return 0
+  [ -n "${DEV_SERIAL:-}" ] && { echo "$DEV_SERIAL"; return; }
   adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | while read -r s; do
     [ "$(adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r')" = rg40xx ] && { echo "$s"; break; }
   done
