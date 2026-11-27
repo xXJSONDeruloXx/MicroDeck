@@ -20,7 +20,12 @@ fi
 t0=$(date +%s)
 sxx eval "SteamClient.Apps.RunGame(\"$app\",\"\",-1,100)" >/dev/null || fail "RunGame"
 echo "launched"
-focused_game() { a=$(xprop -root _NET_ACTIVE_WINDOW | sed 's/.*# //'); xprop -id "$a" WM_CLASS 2>/dev/null | grep -q "steam_app_$app"; }
+# Proton windows carry WM_CLASS steam_app_<id>; native (FEX) games often set none, so sxx-focus's own answer counts too.
+focused_game() {
+  a=$(xprop -root _NET_ACTIVE_WINDOW | sed 's/.*# //')
+  xprop -id "$a" WM_CLASS 2>/dev/null | grep -q "steam_app_$app" && return 0
+  [ "$(xprop -root GAMESCOPE_FOCUSED_APP 2>/dev/null | sed 's/.*= //')" = "$app" ]
+}
 # Steam's dialogs in front of a launch wait for a button. Two are known: "playing on another computer" (Continue would end
 # the account's other session, so cancel and fail instead) and "External Controller Translation" (OK is harmless).
 dialog() { sxx eval -t "Steam Big Picture Mode" 'document.body.innerText' 2>/dev/null | tr '\n' ' '; }
@@ -32,6 +37,7 @@ until base | grep -qE "^(413091, )?$app," && focused_game; do
     case "$(dialog)" in
       *"already playing"*|*"another computer"*) sxx pad b; fail "Steam says the account is playing on another computer; launch cancelled (not continued, that would end the other session)" ;;
       *"External Controller Translation"*) sxx pad a; echo "dismissed the controller translation hint" ;;
+      *"On-Screen Keyboard"*|*"Magnifier Tool"*) sxx pad a; echo "dismissed a Steam launch hint" ;;
     esac
   fi
   sleep 2
