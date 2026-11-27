@@ -210,6 +210,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       (Proton) and Hotline Miami (FEX) pass the game test. One image per device from the same rootfs (`DEVICE=rg28xx tools/build-image.sh`,
       CI matrix); `sxx-update` downloads `steamos-<device>.img.xz` by `/etc/sxx-device`. Open: a release with it, the DTB from our own
       kernel build instead of ROCKNIX's, whether one U-Boot could serve both devices (probe at boot, cross-check the DRAM values under stress).
+      Not yet tried (needs the card moved by hand): the RG28XX booting from slot 1 with the image's own `card-rg28xx.bin` U-Boot.
 
 ## Ideas from Handtop (junsulee119/handtop, reviewed 2026-11-26)
 Handtop is a Debian desktop (labwc, no Steam) for the sibling RG35XX-H: same H700, ROCKNIX kernel/DTBs unchanged, Debian
