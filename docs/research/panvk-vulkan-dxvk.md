@@ -61,6 +61,11 @@ the missing features in PanVK's NIR lowering (geometry shaders and clip distance
 Native Vulkan titles that need only the 1.3 core features without those four may work; `WineD3D` on Panfrost GL stays the default.
 Run `vulkaninfo` against any newer Mesa build the same way to compare.
 
+GL speed of the two builds (`glxgears`, `vblank_mode=0`, 5 s samples, alternating, the Steam UI running): Debian's Mesa 26.1.6 about
+2400 FPS, our 26.3.1 prefix 1200-1350 FPS, same renderer string (`Mali-G31 MC1 (Panfrost)`, GL 3.1). So the newer Mesa is not faster out of
+the box; our cross build (`-Dbuildtype=release`, no CPU tuning, no LTO) is slower than Debian's. Do not replace the system GL with this prefix;
+if the prefix is ever to ship for PanVK, build it with Debian's flags (`-O2`, `-mcpu=cortex-a53`, LTO) and compare again.
+
 ## Hardware expansion
 RK3326 (A35/G31) and RK3566 (A55/G52) share Bifrost, so userspace GPU work carries over (core counts and bandwidth differ).
 RK3566 has native LSE atomics (some units 2 GB RAM). Make it the second performance target without blocking H700 research;
