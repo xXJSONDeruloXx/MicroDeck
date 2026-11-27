@@ -40,6 +40,27 @@ emulation.
 - Test gates: native feature microtests and applicable dEQP/VK-GL-CTS cases, then a pinned legacy DXVK with a light D3D9 title
   (logs must name the Mali, not llvmpipe), then FPS/correctness/CPU/RAM/thermals; D3D11 and Gamescope only after that.
 
+## Measured on the Mali-G31 (2026-11-27, `tools/mesa/try-on-device.sh`, RG28XX, Mesa 26.3.1 prefix in `/opt/mesa-sxx`)
+PanVK finds the GPU and reports **Vulkan 1.3.363** (device `Mali-G31 MC1`, driver `panvk`, `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1`), against
+Vulkan 1.0.354 from the system Mesa 26.1.6. Needs `XAUTHORITY` for vulkaninfo's X surface and `libxcb-keysyms1`.
+
+| Feature or extension | G31 with 26.3.1 |
+|---|---|
+| `geometryShader`, `tessellationShader` | no |
+| `shaderClipDistance`, `shaderCullDistance` | no |
+| `fillModeNonSolid`, `multiDrawIndirect` | no |
+| `descriptorIndexing` (core 1.2 flag) | no (`maxPerStageDescriptorSamplers` 128) |
+| `VK_EXT_robustness2` / `nullDescriptor`, `VK_EXT_transform_feedback` | not exposed |
+| `robustBufferAccess`, `fullDrawIndexUint32`, `independentBlend`, `depthClamp`, `depthBiasClamp`, `samplerAnisotropy`, `occlusionQueryPrecise`, `textureCompressionBC`, `shaderDrawParameters` | yes |
+| `VK_EXT_custom_border_color`, `VK_EXT_depth_clip_enable`, extended dynamic state 1-3, `VK_KHR_dynamic_rendering`, timeline semaphores, `synchronization2`, `push_descriptor`, `VK_EXT_memory_budget` | yes |
+
+DXVK treats geometry shaders, `shaderClipDistance`/`shaderCullDistance` and `fillModeNonSolid` as required features (it also wants
+robustness2 `nullDescriptor` and transform feedback for D3D10/11), so it will not create a device here, with any version from 1.x
+to 2.x. Stage (2) therefore ends in "blocked by hardware features, not by the driver version"; the only way around would be to emulate
+the missing features in PanVK's NIR lowering (geometry shaders and clip distances are real work on Bifrost v7), which is stage (3).
+Native Vulkan titles that need only the 1.3 core features without those four may work; `WineD3D` on Panfrost GL stays the default.
+Run `vulkaninfo` against any newer Mesa build the same way to compare.
+
 ## Hardware expansion
 RK3326 (A35/G31) and RK3566 (A55/G52) share Bifrost, so userspace GPU work carries over (core counts and bandwidth differ).
 RK3566 has native LSE atomics (some units 2 GB RAM). Make it the second performance target without blocking H700 research;

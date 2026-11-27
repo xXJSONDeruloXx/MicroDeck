@@ -9,10 +9,10 @@ tarball=${1:-out/mesa/mesa-26.3.1-arm64.tar.xz}
 report=out/mesa/device-report.txt
 dev() { bash tools/dev.sh sh "$1"; }
 echo "== copying $tarball"
-s=$(adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | head -1)
+s=${DEV_SERIAL:-$(adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | head -1)}
 if [ -n "$s" ]; then adb -s "$s" push "$tarball" /var/tmp/mesa-sxx.tar.xz >/dev/null
 else scp -q -i secrets/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$tarball" root@${DEV_HOST:-rg40xx.local}:/var/tmp/mesa-sxx.tar.xz; fi
-dev 'rm -rf /opt/mesa-sxx && tar -C / -xJf /var/tmp/mesa-sxx.tar.xz && ls /opt/mesa-sxx/lib | head -4; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libxcb-keysyms1 vulkan-tools 2>&1 | tail -1'
+dev 'rm -rf /opt/mesa-sxx && tar -C / -xJf /var/tmp/mesa-sxx.tar.xz && ls /opt/mesa-sxx/lib | head -4; DEBIAN_FRONTEND=noninteractive apt-get update -qq 2>&1 | tail -1; DEBIAN_FRONTEND=noninteractive apt-get install -y -qq libxcb-keysyms1 vulkan-tools 2>&1 | tail -1'
 ICD=/opt/mesa-sxx/share/vulkan/icd.d/panfrost_icd.cortex-a53.json
 {
   echo "# Mesa prefix on the device, $(date -u +%FT%TZ)"
