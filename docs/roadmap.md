@@ -237,7 +237,9 @@ trixie userspace. No gaming stack, but several transferable parts:
       sleeps). logind restarts without announcing the wake, so NetworkManager stays "asleep" and the network never comes back: the RG28XX
       kept `usb0` down for 90 minutes and the RG40XX-H would have had no Wi-Fi (awake but unreachable). Fix: `WatchdogSec=0` drop-ins for the five
       units that have one (hostnamed, journald, logind, timesyncd, udevd, `10-mdeck-no-watchdog.conf`). Verified on the RG28XX: a 4-minute sleep,
-      zero watchdog kills, NetworkManager reconnected 16 s after the wake. Still to do on the RG40XX-H: a 30-minute sleep after updating it.
+      zero watchdog kills, NetworkManager reconnected 16 s after the wake. Verified on the RG28XX running v0.7.2 (2026-11-27 09:53): the 30-minute case that failed before
+      now wakes on the RTC with zero watchdog kills, NetworkManager reconnects in about 5 s and the internet is reachable. Still to do on the
+      RG40XX-H: a 30-minute sleep after updating it (its Wi-Fi path differs: SDIO unbind and rebind).
       OPEN PROBLEM (2026-11-27 05:20): a 30-minute test (`mdeck-sleep test 1800`, RTC alarm +1800 s) on the RG40XX-H,
       running standalone from slot 1 on battery over Wi-Fi, never came back: no ping or SSH 25 minutes after the alarm, while 40 s tests on the
       same unit (two) and on the RG28XX (four, including Steam's own Sleep and a game in front) all woke on time and reconnected in about 8 s.
