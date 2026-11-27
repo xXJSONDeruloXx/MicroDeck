@@ -37,7 +37,7 @@ POINTER_MIN, POINTER_MAX, RAMP = 120.0, 700.0, 0.9  # px/s; seconds from min to 
 DEADZONE = 0.18
 SCROLL_TICKS = 6.0  # wheel clicks per second at full deflection
 HOME = os.path.expanduser("~")
-STATE = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+MODE_FILE = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "mdeck-pad-mode")
 
 
 def find_pad():
@@ -293,6 +293,19 @@ class Desktop:
         if any(out):
             self.mouse.sync()
 
+    def show_mode(self):
+        # the panel shows this file (tint2 executor), so the pad's mode is visible
+        label = "KEYBOARD" if self.osk_active() else "KEYS" if self.keys_mode else "SCROLL" if self.scroll_mode else "MOUSE"
+        if label != self.shown:
+            self.shown = label
+            try:
+                with open(MODE_FILE, "w") as f:
+                    f.write(label)
+            except OSError:
+                pass
+
+    shown = None
+
     def run(self):
         names = {v: k for k, v in BTN.items()}
         last = time.monotonic()
@@ -306,6 +319,7 @@ class Desktop:
             self.motion(now - last)
             last = now
             self.osk_read()
+            self.show_mode()
             if self.start_down and now - self.start_down >= 2.0:
                 self.start_down = None
                 subprocess.Popen(["/usr/local/bin/steamos-session-select", "gamescope"])
