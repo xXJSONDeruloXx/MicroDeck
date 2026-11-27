@@ -19,7 +19,7 @@ check services       'systemctl is-active usb-gadget ssh NetworkManager steam-se
 check failed-units   'systemctl --failed --no-legend | wc -l' '^0$'
 check display        'cat /sys/class/drm/card1-DSI-1/status' 'connected'
 check gpu            'runuser -u steam -- env DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority glxinfo -B | grep "OpenGL renderer"' 'Panfrost'
-check wifi           'nmcli -t -f DEVICE,STATE dev | grep wlan0' 'connected'
+check network        'nmcli -t -f DEVICE,STATE dev | grep -E "^(wlan0|usb0):"' ':connected'
 check audio-sink     'runuser -u steam -- env XDG_RUNTIME_DIR=/run/user/1000 wpctl status | grep -A3 Sinks: | grep -c Built-in' '^1$'
 check battery        'upower -i /org/freedesktop/UPower/devices/battery_battery | grep percentage' '%'
 check gamepad        'grep -c "H700 Gamepad" /proc/bus/input/devices' '[1-9]'
@@ -28,6 +28,7 @@ check steam-ui       "sxx eval '$Q_ROUTE'" '^/routes/'
 check gamescope-mode "sxx eval 'String(!SteamUIStore.WindowStore.GamepadUIMainWindowInstance.BUseSeparateOverlayWindows())'" '^true$'
 check focus-daemon   'pgrep -x sxx-focus >/dev/null && runuser -u steam -- env DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority xprop -root GAMESCOPE_FOCUSABLE_APPS' '769'
 check memory-guards  'systemctl is-active earlyoom reach-guard | sort -u; cat /sys/kernel/mm/lru_gen/min_ttl_ms' '^1000$'
+tools/dev.sh sh 'systemctl start sxx-vpad; sleep 2' >/dev/null 2>&1   # dev-mode only service; releases leave it off
 before=$(tools/dev.sh sh "sxx eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
 tools/dev.sh sh 'sxx pad down wait:600' >/dev/null 2>&1
 after=$(tools/dev.sh sh "sxx eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
