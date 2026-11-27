@@ -153,7 +153,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [ ] First-boot experience: Steam's OOBE (Wi-Fi setup via NetworkManager, sign-in QR) on a fresh image. M
 - [ ] Boot splash (Plymouth, SteamOS-style) and boot-time budget. S
 - [ ] Steam UI speed: CEF on the GPU (`CEF_GPU=1`, Panfrost GLES) vs software; webhelper memory. M
-- [ ] Desktop mode via `steamos-session-select desktop` (optional, lightweight). M
+- [~] Desktop mode (2026-11-27): works on the RG28XX through Steam's "Switch to Desktop": openbox, panel, pad-as-mouse, on-screen keyboard, Firefox, AbiWord, Gnumeric. See docs/research/desktop-mode.md. M
 
 - [x] The gray "cast" square over the launch screen's controller diagram (and other videos) is fixed (2026-11-27). It is Chromium's overlay
       cast button, drawn at the top-left of every `<video>` that can cast: the launch screen plays `steamui/movies/steamdeck_*.webm`.

@@ -66,3 +66,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends libevdev2 libii
 RUN apt-get update && apt-get install -y --no-install-recommends bluez libspa-0.2-bluetooth libxres-dev \
  && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+
+# Desktop mode (Steam's "Switch to Desktop"): openbox is already in the image; a panel, a browser, documents, a text editor, files, a terminal.
+# libxft-dev builds the on-screen keyboard (mdeck-osk). About 430 MB installed, 275 MB of it Firefox.
+RUN apt-get update && apt-get install -y --no-install-recommends firefox-esr abiword gnumeric mousepad pcmanfm xterm tint2 \
+      fonts-dejavu-core libxft-dev \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*

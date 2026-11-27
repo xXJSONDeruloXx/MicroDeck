@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <focus><focusNew>yes</focusNew><followMouse>no</followMouse><focusLast>yes</focusLast></focus>
+  <placement><policy>Smart</policy></placement>
+  <desktops><number>1</number></desktops>
+  <theme><name>Clearlooks</name><titleLayout>NLC</titleLayout><font place="ActiveWindow"><name>DejaVu Sans</name><size>9</size></font></theme>
+  <keyboard>
+    <keybind key="Menu"><action name="ShowMenu"><menu>root-menu</menu></action></keybind>
+    <keybind key="Scroll_Lock"><action name="ShowMenu"><menu>client-list-combined-menu</menu></action></keybind>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"/></keybind>
+  </keyboard>
+  <mouse><context name="Root"><mousebind button="Right" action="Press"><action name="ShowMenu"><menu>root-menu</menu></action></mousebind></context></mouse>
+  <applications>
+    <application class="*"><maximized>yes</maximized></application>
+  </applications>
+  <menu><file>/etc/mdeck/desktop/menu.xml</file></menu>
+</openbox_config>

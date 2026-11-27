@@ -1,4 +1,15 @@
 #!/bin/bash
-# Steam (-steamos3) calls this to switch sessions; there is only the Steam session, so restart it.
-# Interface from ChimeraOS gamescope-session-steam (MIT).
-"$HOME/.local/share/Steam/steamrtarm64/steam" -shutdown >/dev/null 2>&1 || true
+# Steam (-steamos3) calls this to switch sessions: "plasma" or "desktop" for desktop mode, anything else (gamescope) for Steam's
+# Big Picture. The choice is read by steam-session-x when the session restarts. Interface from ChimeraOS gamescope-session-steam (MIT).
+logger -t steamos-session-select "called with: $*" 2>/dev/null
+dir="$HOME/.config/mdeck"
+mkdir -p "$dir"
+case "${1:-gamescope}" in
+  plasma|desktop) echo desktop > "$dir/session" ;;
+  *) echo gaming > "$dir/session" ;;
+esac
+if pgrep -x mdeck-desktop >/dev/null; then
+  pkill -x mdeck-desktop
+else
+  "$HOME/.local/share/Steam/steamrtarm64/steam" -shutdown >/dev/null 2>&1 || true
+fi

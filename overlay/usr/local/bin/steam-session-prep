@@ -17,3 +17,10 @@ find /dev/shm -maxdepth 1 -user steam \( -name "u1000-*" -o -name "fex-*" -o -na
 # scopes of earlier Steam sessions stay "failed" after a session restart
 systemctl reset-failed "session-*.scope" 2>/dev/null
 true
+# Desktop mode reads the built-in pad itself (mdeck-desktop-pad), so InputPlumber must not hold it; gaming mode needs it.
+if [ "$(cat /home/steam/.config/mdeck/session 2>/dev/null)" = desktop ]; then
+  systemctl stop inputplumber.service
+else
+  systemctl start inputplumber.service
+fi
+true

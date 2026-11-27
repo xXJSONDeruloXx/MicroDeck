@@ -1,0 +1,17 @@
+#!/bin/bash
+# Desktop mode session client, run by startx instead of Steam (see steam-session-x): openbox, a panel and the pad daemon.
+# Ends when openbox ends; steamos-session-select gamescope (menu entry, or Start held) closes it and the session restarts into Steam.
+export XDG_CURRENT_DESKTOP=openbox
+/usr/local/bin/mdeck-rotate
+xset s off -dpms 2>/dev/null
+xsetroot -solid '#1b2430' -cursor_name left_ptr
+openbox --config-file /etc/mdeck/desktop/rc.xml &
+ob=$!
+tint2 -c /etc/mdeck/desktop/tint2rc &
+panel=$!
+/usr/local/bin/mdeck-desktop-pad &
+pad=$!
+trap 'kill $ob 2>/dev/null' TERM INT HUP
+while kill -0 $ob 2>/dev/null; do wait $ob; done
+kill $pad $panel 2>/dev/null
+wait $pad 2>/dev/null
