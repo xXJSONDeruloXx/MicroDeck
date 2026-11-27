@@ -2,7 +2,7 @@
 """Desktop mode controller: the built-in pad becomes a virtual mouse and keyboard (uinput).
 
 Pointer mode (default): d-pad or left stick moves the pointer, right stick or L2 + d-pad scrolls, A left click (hold drags),
-B right click, X on-screen keyboard (X and Y as Steam names them), Y middle click, L1 Esc, R1 Enter, R2 Backspace, Select toggles keys mode, Start opens the menu.
+B right click, X (top button) on-screen keyboard, Y (left) middle click, L1 Esc, R1 Enter, R2 Backspace, Select toggles keys mode, Start opens the menu.
 Keys mode (menus, lists): d-pad sends the arrow keys, A Enter, B Esc.
 Start held for two seconds returns to Steam's gaming mode.
 """
