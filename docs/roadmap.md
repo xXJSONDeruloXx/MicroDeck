@@ -129,6 +129,11 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [x] Steam menu in game opens in ~6-9 s now (measured by `sxx-gametest` on the v0.2.1 image; was 10-20 s).
 - [ ] Game mode for 1 GB: suspend or unload steamwebhelper while a game runs, per-game zram/swap
       (Switchdeck's `SD_GAMEMODE`). Measure free RAM in game before/after. M
+      Measured 2026-11-27 (RG28XX, Geometry Wars via Proton in front): 839 of 975 MB used, 136 MB available, 1031 MB in zram (861 MB of data
+      held in 280 MB, 3:1), the game 180 MB resident and all steamwebhelper processes together about 240 MB resident (the rest of Steam's UI is
+      already in zram). The kernel already evicts the UI, so a `memory.reclaim` nudge when a game takes focus would free little and cost zstd time;
+      it is not worth building until a title runs out of memory with the current guards. Unloading the web helper entirely would break the
+      Guide-button menu.
 - [ ] Steam in-game overlay back in the container: LSE-Emu must initialise before the overlay there too
       (container-side wrapper or LD_AUDIT-based early handler). M
 - [x] Controller inside games: verified 2026-11-26 on Geometry Wars (pad presses skip the logo and move the menu highlight
