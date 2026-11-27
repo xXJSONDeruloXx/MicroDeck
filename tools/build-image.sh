@@ -1,17 +1,22 @@
 #!/bin/bash
-# Assembles out/steamos-rg40xx.img from ROCKNIX's U-Boot + kernel + DTBs and our rootfs.
-#   tools/build-image.sh             (runs itself inside an amd64 Debian container)
+# Assembles out/steamos-<device>.img from U-Boot + kernel + DTB and our rootfs; the root filesystem is the same for every device.
+#   DEVICE=rg40xx|rg28xx tools/build-image.sh     (default rg40xx; runs itself inside an amd64 Debian container)
 # Layout: MBR (disk id 53544d52), U-Boot at 8 KiB, p1 FAT32 "STEAMBOOT" 256 MiB at 16 MiB,
 #         p2 ext4 "steamroot" sized to its contents (grown to the card on first boot).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [ ! -f /.dockerenv ]; then
-  exec env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -e STEAM_SEED -e UBOOT -e DTB -e SXX_VERSION -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w \
+  exec env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -e STEAM_SEED -e UBOOT -e DTB -e DEVICE -e SXX_VERSION -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w \
     debian:trixie bash -c 'export DEBIAN_FRONTEND=noninteractive; dpkg --add-architecture arm64; apt-get update -qq >/dev/null;
       apt-get install -y -qq e2fsprogs dosfstools mtools fdisk cpio >/dev/null 2>&1; tools/build-image.sh'
 fi
 
-DTB=${DTB:-sun50i-h700-anbernic-rg40xx-h.dtb}
+DEVICE=${DEVICE:-rg40xx}
+case $DEVICE in
+  rg40xx) DTB=${DTB:-sun50i-h700-anbernic-rg40xx-h.dtb}; UBOOT=${UBOOT:-out/uboot/card.bin} ;;
+  rg28xx) DTB=${DTB:-sun50i-h700-anbernic-rg28xx.dtb}; UBOOT=${UBOOT:-out/uboot/card-rg28xx.bin} ;;
+  *) echo "unknown DEVICE $DEVICE"; exit 1 ;;
+esac
 work=/tmp/img
 rm -rf $work && mkdir -p $work/root $work/boot/extlinux $work/boot/dtbs
 echo "== unpacking rootfs"
@@ -19,6 +24,7 @@ tar -C $work/root -xpf out/rootfs.tar --numeric-owner
 rm -f $work/root/.dockerenv
 # the release tag when CI builds one (sxx-update compares against it); "dev" is never offered an update
 echo "${SXX_VERSION:-dev}" > $work/root/etc/sxx-release
+echo "$DEVICE" > $work/root/etc/sxx-device   # which release asset sxx-update downloads
 # docker export leaves the container-managed files empty
 cp overlay/etc/hostname overlay/etc/hosts $work/root/etc/
 rm -f $work/root/etc/resolv.conf && ln -s ../run/NetworkManager/resolv.conf $work/root/etc/resolv.conf
@@ -35,10 +41,18 @@ echo "== boot partition"
 # Our kernel (kernel/build.sh, 7.2.0-sxx: HIDRAW, UHID, USB/IP) when cache/kernel has it, else ROCKNIX's stock 7.2.0.
 if [ -f cache/kernel/KERNEL ]; then
   cp cache/kernel/KERNEL $work/boot/KERNEL
-  cp cache/kernel/dtbs/sun50i-h700-anbernic-rg40xx-*.dtb $work/boot/dtbs/
 else
   cp cache/boot/KERNEL $work/boot/KERNEL
-  cp cache/boot/device_trees/sun50i-h700-anbernic-rg40xx-*.dtb $work/boot/dtbs/
+fi
+# the device's own tree: from our kernel build when it has one, else ROCKNIX's (same sources and patches)
+for d in cache/kernel/dtbs cache/boot/device_trees; do
+  [ -f "$d/$DTB" ] && { cp "$d/$DTB" $work/boot/dtbs/; break; }
+done
+[ -f "$work/boot/dtbs/$DTB" ] || { echo "no $DTB in cache/kernel/dtbs or cache/boot/device_trees"; exit 1; }
+if [ "$DEVICE" = rg40xx ]; then   # the panel-revision variants stay selectable by editing extlinux.conf
+  for d in cache/kernel/dtbs cache/boot/device_trees; do
+    ls $d/sun50i-h700-anbernic-rg40xx-*.dtb >/dev/null 2>&1 && { cp $d/sun50i-h700-anbernic-rg40xx-*.dtb $work/boot/dtbs/; break; }
+  done
 fi
 # Logging initramfs: writes bootlog-N.txt to this partition, then switches to the real root.
 # (rdinit=/no-initramfs, which skips ROCKNIX's built-in initramfs, reset the board; this boots.)
@@ -81,11 +95,10 @@ root_mb=3072
 mke2fs -q -t ext4 -L steamroot -m 1 -E root_owner=0:0 -d $work/root $work/root.img ${root_mb}M
 
 echo "== disk image"
-out=out/steamos-rg40xx.img
+out=out/steamos-$DEVICE.img
 # The image must end exactly where the root ends: flashing it must not touch the data partition that follows.
 total_mb=$(( 16 + boot_mb + root_mb ))
 rm -f $out && truncate -s ${total_mb}M $out
-UBOOT=${UBOOT:-out/uboot/card.bin}
 [ -f "$UBOOT" ] || UBOOT=cache/uboot.bin
 echo "== U-Boot: $UBOOT"
 dd if="$UBOOT" of=$out bs=1K seek=8 conv=notrunc status=none

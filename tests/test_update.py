@@ -51,6 +51,38 @@ class UpdateTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(d, "trial")))
 
 
+class DeviceAssetTest(unittest.TestCase):
+    """A release carries one image per handheld; the device file says which one this unit downloads."""
+
+    def latest(self, device):
+        import json
+        import pathlib
+        with tempfile.TemporaryDirectory() as d:
+            api = os.path.join(d, "api.json")
+            with open(api, "w") as f:
+                json.dump({"tag_name": "v0.7.0", "body": "", "assets": [
+                    {"name": n, "browser_download_url": "https://example.invalid/" + n}
+                    for n in ("steamos-rg40xx.img.xz", "steamos-rg40xx.img.xz.sha256",
+                              "steamos-rg28xx.img.xz", "steamos-rg28xx.img.xz.sha256")]}, f)
+            env = dict(os.environ, SXX_UPDATE_SOURCED="1", SXX_UPDATE_STATE=d, SXX_UPDATE_API=pathlib.Path(api).as_uri())
+            if device:
+                with open(os.path.join(d, "device"), "w") as f:
+                    f.write(device + "\n")
+                env["SXX_DEVICE_FILE"] = os.path.join(d, "device")
+            else:
+                env["SXX_DEVICE_FILE"] = os.path.join(d, "missing")
+            r = subprocess.run(["bash", "-c", '. "%s"; latest' % SCRIPT.replace("\\", "/")], env=env, capture_output=True, text=True)
+            return r.stdout.split()
+
+    def test_each_device_gets_its_own_image(self):
+        self.assertEqual(self.latest("rg28xx")[:3], ["v0.7.0", "https://example.invalid/steamos-rg28xx.img.xz",
+                                                    "https://example.invalid/steamos-rg28xx.img.xz.sha256"])
+        self.assertIn("steamos-rg40xx.img.xz", self.latest("rg40xx")[1])
+
+    def test_images_without_a_device_file_are_the_rg40xx(self):
+        self.assertIn("steamos-rg40xx.img.xz", self.latest(None)[1])
+
+
 class SteamosHookTest(unittest.TestCase):
     """Steam calls `steamos-update --enable-duplicate-detection check`: the verb is not the first argument."""
 

@@ -33,6 +33,9 @@ jobs:
       - run: bash uboot/build.sh card
       - run: bash uboot/build.sh fel-boot
       - run: bash uboot/build.sh fel-reset
+      # RG28XX: its own DRAM values (uboot/rg28xx_lpddr4_defconfig, read from its boot0)
+      - run: UBOOT_DEFCONFIG=rg28xx_lpddr4_defconfig UBOOT_SUFFIX=-rg28xx bash uboot/build.sh card
+      - run: UBOOT_DEFCONFIG=rg28xx_lpddr4_defconfig UBOOT_SUFFIX=-rg28xx bash uboot/build.sh fel-boot
       - uses: actions/upload-artifact@v4
         with: {name: uboot, path: out/uboot/*.bin}
 
@@ -76,14 +79,16 @@ jobs:
             out/rootfs.tar
             cache/kernel/KERNEL
             cache/kernel/dtbs/sun50i-h700-anbernic-rg40xx-*.dtb
+            cache/boot/device_trees/sun50i-h700-anbernic-rg28xx.dtb
           retention-days: 3
           compression-level: 0
 
   image:
     needs: [uboot, rootfs]
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    strategy:
+      matrix:
+        device: [rg40xx, rg28xx]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -92,25 +97,39 @@ jobs:
         with: {name: rootfs, path: .}
       - run: bash tools/build-image.sh
         env:
+          DEVICE: ${{ matrix.device }}
           SXX_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
-      - run: sudo chown -R "$(id -u):$(id -g)" out && xz -T0 -6 out/steamos-rg40xx.img && (cd out && sha256sum steamos-rg40xx.img.xz | tee steamos-rg40xx.img.xz.sha256)
+      - run: sudo chown -R "$(id -u):$(id -g)" out && xz -T0 -6 out/steamos-${{ matrix.device }}.img && (cd out && sha256sum steamos-${{ matrix.device }}.img.xz | tee steamos-${{ matrix.device }}.img.xz.sha256)
       - uses: actions/upload-artifact@v4
         with:
-          name: image
+          name: image-${{ matrix.device }}
           path: |
-            out/steamos-rg40xx.img.xz
-            out/steamos-rg40xx.img.xz.sha256
+            out/steamos-${{ matrix.device }}.img.xz
+            out/steamos-${{ matrix.device }}.img.xz.sha256
             out/uboot/*.bin
-      - if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: image
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: 'image-*', path: out, merge-multiple: true}
+      - uses: softprops/action-gh-release@v2
         with:
           draft: true
           body_path: docs/release-notes/${{ github.ref_name }}.md
           files: |
             out/steamos-rg40xx.img.xz
             out/steamos-rg40xx.img.xz.sha256
+            out/steamos-rg28xx.img.xz
+            out/steamos-rg28xx.img.xz.sha256
             out/uboot/fel-boot.bin
             out/uboot/fel-reset.bin
+            out/uboot/fel-boot-rg28xx.bin
 
   vm-boot:
     needs: image
@@ -118,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: {name: image, path: out}
+        with: {name: image-rg40xx, path: out}
       - uses: actions/cache@v4
         with:
           path: cache/qemu/Image
