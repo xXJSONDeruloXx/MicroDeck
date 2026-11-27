@@ -51,5 +51,25 @@ class UpdateTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(d, "trial")))
 
 
+class SteamosHookTest(unittest.TestCase):
+    """Steam calls `steamos-update --enable-duplicate-detection check`: the verb is not the first argument."""
+
+    def call(self, *args):
+        with tempfile.TemporaryDirectory() as d:
+            release = os.path.join(d, "release")
+            with open(release, "w") as f:
+                f.write("v0.4.0\n")
+            env = dict(os.environ, SXX_RELEASE_FILE=release, SXX_UPDATE_STATE=d, SXX_UPDATE_API="http://127.0.0.1:9/none")
+            return subprocess.run(["bash", SCRIPT, "steamos", *args], env=env, capture_output=True, text=True, timeout=60)
+
+    def test_duplicate_detection_probe(self):
+        self.assertEqual(self.call("--supports-duplicate-detection").returncode, 0)
+
+    def test_check_with_a_flag_first_is_a_check_not_an_install(self):
+        r = self.call("--enable-duplicate-detection", "check")
+        self.assertEqual(r.returncode, 7)  # the release server is unreachable: "no update", and nothing was downloaded
+        self.assertNotIn("downloading", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
