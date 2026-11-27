@@ -240,6 +240,9 @@ trixie userspace. No gaming stack, but several transferable parts:
       zero watchdog kills, NetworkManager reconnected 16 s after the wake. Verified on the RG28XX running v0.7.2 (2026-11-27 09:53): the 30-minute case that failed before
       now wakes on the RTC with zero watchdog kills, NetworkManager reconnects in about 5 s and the internet is reachable. Still to do on the
       RG40XX-H: a 30-minute sleep after updating it (its Wi-Fi path differs: SDIO unbind and rebind).
+      Seen once (RG28XX, first sleep after the rebrand, 40 s): after the wake the handheld's usb0 was up and the gadget had restarted itself, but
+      Windows kept the UsbNcm adapter "Disconnected" (no internet over USB) until `systemctl restart usb-gadget` was run a second time; six
+      earlier sleeps reconnected on their own. If it recurs, restart the gadget a second time in the sleep hook a few seconds after the first.
       OPEN PROBLEM (2026-11-27 05:20): a 30-minute test (`mdeck-sleep test 1800`, RTC alarm +1800 s) on the RG40XX-H,
       running standalone from slot 1 on battery over Wi-Fi, never came back: no ping or SSH 25 minutes after the alarm, while 40 s tests on the
       same unit (two) and on the RG28XX (four, including Steam's own Sleep and a game in front) all woke on time and reconnected in about 8 s.

@@ -43,6 +43,10 @@ if [ ! -b "$data" ]; then
   fi
 fi
 
+# A data partition from before the rename keeps its bookkeeping and host keys in /home/.sxx. The initramfs moves it when it can see the
+# partition; after a reflash the partition entry only comes back above, so do it here.
+if [ -d /home/.sxx ] && [ ! -e /home/.mdeck ]; then mv /home/.sxx /home/.mdeck; fi
+
 # host keys live on the data partition too, so an OS update does not change the device's SSH identity
 hk=/home/.mdeck/ssh-host-keys
 if ls $hk/ssh_host_* >/dev/null 2>&1; then

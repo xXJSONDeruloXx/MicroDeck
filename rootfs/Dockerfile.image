@@ -27,6 +27,7 @@ COPY secrets/nm/ /etc/NetworkManager/system-connections/
 RUN chmod 700 /root/.ssh /home/steam/.ssh && chown -R steam:steam /home/steam/.ssh \
  && find /etc/NetworkManager/system-connections -type f -exec chmod 600 {} + \
  && find /etc/systemd /etc/ssh/sshd_config.d /etc/NetworkManager/conf.d /etc/steam-session.conf -type f -exec chmod 644 {} + \
+ && ln -sf mdeck-wrap /usr/local/bin/sxx-wrap \
  && chmod +x /usr/local/bin/* /usr/local/sbin/* /usr/lib/systemd/system-sleep/* /usr/bin/inputplumber \
  && systemctl enable ssh.service NetworkManager.service usb-gadget.service firstboot.service \
       wifi-kick.service steam-session.service systemd-timesyncd.service reach-guard.service earlyoom.service handheld-keys.service mdeck-wifi-import.service inputplumber.service mdeck-zram-recompress.service bluetooth.service mdeck-mark-good.service mdeck-ui-fixes.service mdeck-sleep-config.service mdeck-battery.service \

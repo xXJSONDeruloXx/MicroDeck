@@ -8,7 +8,7 @@ set -euo pipefail
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 MUOS=${MUOS_SERIAL:-0c001080c69249221d2}
-IMG=out/microdeck-rg40xx.img
+IMG=out/microdeck-${DEVICE:-rg40xx}.img
 step() { echo "== $(date +%H:%M:%S) $*"; }
 [ -f "$IMG" ] || { echo "build the image first: tools/build-image.sh"; exit 1; }
 
