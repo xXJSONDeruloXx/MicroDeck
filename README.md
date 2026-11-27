@@ -120,7 +120,7 @@ The development setup keeps muOS in slot 1 as a known-good recovery system and t
 
 A virtual device needs no hardware at all: `tools/vm.sh setup <image.img.xz>` once, then `tools/vm.sh start`, `sh`, `push`, `test`.
 It boots the real initramfs and image in QEMU on a generic arm64 kernel (systemd, firstboot, the data partition, the updater with its
-rollback and `recovery.txt`; no Steam UI, GPU or pad), and CI boots every image the same way. See [docs/agents.md](docs/agents.md).
+rollback and `recovery.txt`; no Steam UI, GPU or pad), and CI boots every image the same way. See [docs/agents.md](docs/agents.md). The kernel and how it differs from ROCKNIX's: [docs/kernel.md](docs/kernel.md).
 
 See the recovery playbook in [docs/lessons-learned.md](docs/lessons-learned.md) and the running
 [docs/findings.md](docs/findings.md).
