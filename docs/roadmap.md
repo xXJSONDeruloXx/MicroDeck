@@ -87,6 +87,13 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       pin a manifest version, and check that the first start does not re-download. M
 - [x] CI: GitHub Actions builds U-Boot, kernel, InputPlumber, rootfs and image, runs the unit tests and boots the image in QEMU. M
 
+- [ ] **Wi-Fi speed** (high value): downloads on the handheld average ~1 MB/s (first start ~58 min, a 340 MB update ~6 min, Proton 435 MB
+      ~7 min), though the same network gives a PC many times that. Check on the device: which band it joined (`iw dev wlan0 link`: 2.4 GHz
+      or 5 GHz; the RTL8821CS is dual band), power save (`iw dev wlan0 get power_save`, try `set power_save off`; NetworkManager's
+      `wifi.powersave=2`), signal and rate (`iw dev wlan0 station dump`), the rtw88 module options (`disable_lps_deep`, `disable_msi`),
+      SDIO clock, an `iperf3` run against the PC. If 5 GHz is the fix, prefer it in `wifi.txt` handling (`band=a` for the connection) and in
+      NetworkManager's roaming settings. First start would drop from about an hour to minutes. S/M
+
 ## 2. Games
 - [x] Renderer choice on this GPU (WineD3D on Panfrost via `PROTON_USE_WINED3D=1`; DXVK per game): compare DXVK-on-llvmpipe vs `PROTON_USE_WINED3D=1` (Panfrost GL 3.1)
       on Geometry Wars (FPS, CPU); pick a default. S
