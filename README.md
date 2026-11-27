@@ -1,6 +1,6 @@
 # SteamOSXX
 
-SteamOS-style Linux for the Anbernic RG40XX-H (and, in time, other H700 handhelds).
+SteamOS-style Linux for the Anbernic RG40XX-H and RG28XX (and, in time, other H700 handhelds).
 
 Valve's native **arm64 Steam client in Big Picture mode** on a $70 handheld: Anbernic RG40XX-H, Allwinner
 H700 (4x Cortex-A53, Mali-G31, 1 GB RAM, 640x480). A flashable SD-card OS built from a mainline kernel and a
@@ -51,16 +51,21 @@ Card layout: U-Boot at 8 KiB, p1 FAT32 `STEAMBOOT` (kernel, DTBs, initramfs, `ex
 
 ## Install
 
-Tested on one RG40XX-H (LPDDR4). Other units may need different RAM timings (see the warning under
+Tested on one RG40XX-H and one RG28XX (both LPDDR4). Other units may need different RAM timings (see the warning under
 [Building](#building)); a wrong one gives a dead, black boot and does no harm, so keep your stock card.
 
-1. Download `steamos-rg40xx.img.xz` and its `.sha256` from the latest release and check the hash.
+1. Download the image for your handheld, `steamos-rg40xx.img.xz` or `steamos-rg28xx.img.xz`, and its `.sha256` from the latest release and check the hash.
+   The two differ only in U-Boot (the unit's RAM timings) and the device tree; the OS is the same, and each handheld updates itself with its own image.
 2. Write it to a microSD card of 16 GB or more (balenaEtcher, or `xzcat steamos-rg40xx.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync`).
 3. Wi-Fi: on the card's small `STEAMBOOT` partition copy `wifi.txt.example` to `wifi.txt` and fill in `ssid=` and
    `psk=` (add `band=a` to use 5 GHz only, usually much faster). The first start downloads about 1 GB (Valve's Steam client and a Proton build for this CPU).
 4. Put the card in **slot 1** (TF1, the boot slot) and power on. The first start grows the root partition to the
    card, then shows a "Setting up SteamOSXX" progress window and Steam's own update screen: allow up to an hour (about 58 minutes on a home connection in the first test).
 5. Sign in to Steam with the QR code. Games that need Proton use the ARMv8.0 build automatically.
+   **RG28XX has no Wi-Fi.** It shows up as a USB network adapter when plugged into a PC (CDC-NCM, no driver on Windows 11, macOS or Linux),
+   and the first start needs internet through it: on Windows run `tools/win-share-usb.ps1` from an elevated PowerShell (Internet
+   Connection Sharing); on Linux or macOS share the PC's connection with the USB interface. The handheld answers at 169.254.58.58 even
+   without sharing (SSH, `adb`).
 6. Optional SSH: copy `authorized_keys.example` to `authorized_keys` on the same partition and paste your public key;
    it is installed at the next boot (`ssh root@rg40xx.local`).
 

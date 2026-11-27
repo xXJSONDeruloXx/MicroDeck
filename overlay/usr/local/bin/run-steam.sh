@@ -11,7 +11,11 @@ if [ ! -x "$root/steamrtarm64/steam" ] || [ ! -f "$root/compatibilitytools.d/$(.
     waited=0
     until curl -fsI --max-time 10 https://client-update.steamstatic.com/ -o /dev/null || [ $? = 22 ]; do
       waited=$((waited + 5))
-      [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. On a PC, copy wifi.txt.example to wifi.txt on the card's STEAMBOOT partition, fill in ssid= and psk=, and restart."
+      if [ -e /sys/class/net/wlan0 ]; then
+        [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. On a PC, copy wifi.txt.example to wifi.txt on the card's STEAMBOOT partition, fill in ssid= and psk=, and restart."
+      else
+        [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. This handheld has no Wi-Fi: plug it into a PC with the USB cable and share the PC's connection with it (README, Install)."
+      fi
       sleep 5
     done
     setup_ui_run /usr/local/bin/steam-install.sh || { setup_ui_end; exit 1; }

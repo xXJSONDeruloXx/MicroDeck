@@ -146,6 +146,13 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       for our virtual Deck controller (a USB/IP `vhci_hcd` device, 28de:1205) reads as "remote". Next: catch the element
       (hold the launch screen open, `document.elementsFromPoint` at CSS px = screen px x 1.47) and see what decides the glyph;
       the fix, if any, belongs in how InputPlumber presents the device (its sysfs/HID bus attributes), not in Steam. S
+      2026-11-27 findings (RG28XX, USB network, offline): Chromium's `RemotePlayback` is not supported in this CEF ("Availability
+      monitoring is not supported on this device"), so Chromium's own overlay cast button is ruled out. Steam's Deck diagrams
+      (`steamui/movies/steamdeck_*.webm`) and generic `<video>` elements render with no glyph here, with or without `controls`. The
+      interstitial never appears for Geometry Wars or Hotline Miami offline, only for games with an official layout when online (seen
+      on the RG40XX-H with Sonic Mania): the next attempt has to run on the RG40XX-H over Wi-Fi with such a game, catching
+      `[class*=ControlOverviewContainer]` (the component, in `steamui/sp.js`, renders an `<img>` or `<video>` plus a header) and its
+      neighbours, since the glyph sits exactly at the top-left corner of that box.
 
 ## 4. Hardware
 - [ ] Sleep/wake: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM
@@ -186,8 +193,14 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       `sxx-usb` (udev override `86-sxx-usb.rules` because Debian hides gadget interfaces) takes DHCP when the PC shares its
       connection and always keeps 169.254.58.58, which the PC reaches with no setup (verified on the RG40XX-H: ping and SSH).
       Internet: Windows Internet Connection Sharing from the Wi-Fi/Ethernet adapter to the "UsbNcm" adapter.
-- [ ] RG28XX itself: DRAM parameters from its stock boot0 (`tools/boot0-dram.py`, read over adb on muOS), own U-Boot card.bin,
-      `sun50i-h700-anbernic-rg28xx.dtb` (already in the ROCKNIX DTB set), portrait panel rotation, its joypad variant.
+- [x] RG28XX (2026-11-27): DRAM values from its stock boot0 (`tools/boot0-dram.py`: LPDDR4 672 MHz, only three delay words differ from
+      the RG40XX-H; `uboot/rg28xx_lpddr4_defconfig`), ROCKNIX's `sun50i-h700-anbernic-rg28xx.dtb` with our kernel (panel firmware,
+      joypad with 17 GPIO keys and rumble, AXP717, USB Ethernet all came up), booted over FEL from its own muOS (`fel-boot.sh` falls back
+      to muOS's python for the efex reboot). The panel is 480x640 portrait: `sxx-rotate` rotates the X output at session start from the
+      connector's panel orientation ("Left Side Up" -> `left`, matching the kernel console). Smoke test 0 failures, Geometry Wars
+      (Proton) and Hotline Miami (FEX) pass the game test. One image per device from the same rootfs (`DEVICE=rg28xx tools/build-image.sh`,
+      CI matrix); `sxx-update` downloads `steamos-<device>.img.xz` by `/etc/sxx-device`. Open: a release with it, the DTB from our own
+      kernel build instead of ROCKNIX's, whether one U-Boot could serve both devices (probe at boot, cross-check the DRAM values under stress).
 
 ## Ideas from Handtop (junsulee119/handtop, reviewed 2026-11-26)
 Handtop is a Debian desktop (labwc, no Steam) for the sibling RG35XX-H: same H700, ROCKNIX kernel/DTBs unchanged, Debian
