@@ -1,0 +1,14 @@
+#!/bin/sh
+# Rough Big Picture responsiveness benchmark: goes to the library home, scrolls with the virtual test pad
+# for ~20 s and reports CPU time used by Steam's web helper, the client and Xorg in that window.
+mdeck eval 'location.href="/routes/library/home"' >/dev/null 2>&1
+sleep 5
+ticks() { for p in $(pgrep -u steam -f "$1"); do awk '{print $14 + $15}' /proc/$p/stat 2>/dev/null; done | awk '{s += $1} END {print s + 0}'; }
+w0=$(ticks steamwebhelper) c0=$(ticks "steamrtarm64/steam ") x0=$(ticks Xorg) t0=$(date +%s.%N)
+mdeck pad down wait:600 right wait:600 right wait:600 right wait:600 down wait:600 down wait:600 \
+        up wait:600 up wait:600 left wait:600 left wait:600 left wait:600 up wait:600
+sleep 14
+w1=$(ticks steamwebhelper) c1=$(ticks "steamrtarm64/steam ") x1=$(ticks Xorg) t1=$(date +%s.%N)
+hz=$(getconf CLK_TCK)
+awk -v w=$((w1 - w0)) -v c=$((c1 - c0)) -v x=$((x1 - x0)) -v hz="$hz" -v t0="$t0" -v t1="$t1" 'BEGIN {
+  d = t1 - t0; printf "window %.1f s: webhelper %.0f%% cpu, client %.0f%%, Xorg %.0f%% (100%% = one core)\n", d, 100*w/hz/d, 100*c/hz/d, 100*x/hz/d }'

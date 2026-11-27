@@ -1,0 +1,8 @@
+#!/bin/sh
+# Launch-option wrapper for debugging a game started by Steam: set its launch options to
+# "mdeck-wrap %command%". Writes the environment, the command and all output to /tmp/mdeck-wrap-<appid>.log.
+log=/tmp/mdeck-wrap-${SteamAppId:-unknown}.log
+# A log left by another user (sticky /tmp) must not stop the game from starting.
+{ : >> "$log"; } 2>/dev/null || log=$HOME/mdeck-wrap-${SteamAppId:-unknown}.log
+{ echo "== $(date) command:"; printf ' [%s]' "$@"; echo; echo "== environment:"; env | sort; echo "== output:"; } > "$log"
+exec "$@" >> "$log" 2>&1

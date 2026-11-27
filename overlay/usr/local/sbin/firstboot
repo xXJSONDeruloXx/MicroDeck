@@ -2,9 +2,9 @@
 # One-time setup on the device: the data partition for /home, new SSH host keys.
 #
 # The image holds boot (p1) and a fixed-size root (p2). Everything the user accumulates (Steam, Proton, games,
-# prefixes, the Steam login) lives in /home on a third partition, "sxxdata", that starts right after the root and runs
+# prefixes, the Steam login) lives in /home on a third partition, "microdeck-data", that starts right after the root and runs
 # to the end of the card. Writing a new image to the card only rewrites p1 and p2, so the data is still there: when the
-# partition table has no p3 but an ext4 filesystem labelled sxxdata sits at that offset, the partition entry is put back
+# partition table has no p3 but an ext4 filesystem labelled microdeck-data sits at that offset, the partition entry is put back
 # instead of formatting. A card without one gets a new data partition, seeded with the image's /home.
 set -x
 root=$(findmnt -no SOURCE /)
@@ -19,7 +19,7 @@ if [ ! -b "$data" ]; then
   total=$(( $(blockdev --getsz "$disk") ))
   if [ "$start" -gt 0 ] && [ $(( total - start )) -gt 2097152 ]; then
     found=no
-    if blkid -p -O $(( start * 512 )) -o export "$disk" 2>/dev/null | grep -qx 'LABEL=sxxdata'; then
+    if blkid -p -O $(( start * 512 )) -o export "$disk" 2>/dev/null | grep -qxE 'LABEL=(microdeck-data|sxxdata)'; then
       blkid -p -O $(( start * 512 )) -o export "$disk" | grep -qx 'TYPE=ext4' && found=yes
     fi
     echo "start=$start, type=83" | sfdisk --append --no-reread -q "$disk"
@@ -33,8 +33,8 @@ if [ ! -b "$data" ]; then
         e2fsck -p -f "$data" ; resize2fs "$data" || true
         echo "firstboot: reusing the existing data partition"
       else
-        mkfs.ext4 -F -q -L sxxdata -m 1 "$data" && {
-          mkdir -p /mnt/sxxdata && mount "$data" /mnt/sxxdata && cp -a /home/. /mnt/sxxdata/ && umount /mnt/sxxdata
+        mkfs.ext4 -F -q -L microdeck-data -m 1 "$data" && {
+          mkdir -p /mnt/microdeck-data && mount "$data" /mnt/microdeck-data && cp -a /home/. /mnt/microdeck-data/ && umount /mnt/microdeck-data
         }
         echo "firstboot: created a new data partition"
       fi
@@ -44,12 +44,12 @@ if [ ! -b "$data" ]; then
 fi
 
 # host keys live on the data partition too, so an OS update does not change the device's SSH identity
-hk=/home/.sxx/ssh-host-keys
+hk=/home/.mdeck/ssh-host-keys
 if ls $hk/ssh_host_* >/dev/null 2>&1; then
   cp -a $hk/ssh_host_* /etc/ssh/
 else
   ssh-keygen -A
-  mkdir -p $hk && chmod 700 /home/.sxx $hk && cp -a /etc/ssh/ssh_host_* $hk/
+  mkdir -p $hk && chmod 700 /home/.mdeck $hk && cp -a /etc/ssh/ssh_host_* $hk/
 fi
 mkdir -p /var/log/journal && systemd-tmpfiles --create --prefix /var/log/journal
 touch /var/lib/firstboot.done

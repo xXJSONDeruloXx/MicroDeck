@@ -1,8 +1,8 @@
 #!/bin/bash
-# Proves that installing only the used chunks (sxx-used-chunks) gives a correct root: take the root partition of an image, write just
+# Proves that installing only the used chunks (mdeck-used-chunks) gives a correct root: take the root partition of an image, write just
 # its used chunks onto a target full of random bytes (the worst case for stale data), then require a clean e2fsck and an identical
 # file tree (`diff -r` of both mounted read-only).
-#   tools/qemu/verify-chunks.sh <steamos-rg40xx.img.xz>
+#   tools/qemu/verify-chunks.sh <microdeck-rg40xx.img.xz>
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 img=${1:?usage: tools/qemu/verify-chunks.sh image.img.xz}
@@ -14,7 +14,7 @@ env MSYS_NO_PATHCONV=1 docker run --rm --privileged --platform linux/amd64 -v "$
   echo "== extracting the root partition"
   xz -dc "'"$img"'" | { dd of=/dev/null bs=1M count=272 iflag=fullblock status=none; dd of=$W/root.img bs=1M count=3072 iflag=fullblock status=none; }
   echo "== used chunks"
-  python3 overlay/usr/local/sbin/sxx-used-chunks $W/root.img > $W/chunks
+  python3 overlay/usr/local/sbin/mdeck-used-chunks $W/root.img > $W/chunks
   awk "{s += \$2} END {print s \" of 3072 MiB are written\"}" $W/chunks
   echo "== target full of random bytes"
   head -c 3221225472 /dev/urandom > $W/target.img

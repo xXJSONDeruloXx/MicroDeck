@@ -1,0 +1,19 @@
+#!/bin/sh
+# Started in the background by run-steam.sh on every Steam start; needs the DevTools port (CDP_PORT).
+# 1. As soon as Steam's UI answers: make the ARMv8.0 Proton the default compatibility tool, unless one was chosen.
+# 2. After sign-in, once Big Picture's library shows: apply /usr/local/share/mdeck/steam-defaults.js.
+# One copy at a time: the lock is released when it exits.
+exec 8>"${XDG_RUNTIME_DIR:-/tmp}/mdeck-steam-defaults.lock"
+flock -n 8 || exit 0
+until mdeck eval 'location.pathname' >/dev/null 2>&1; do sleep 5; done
+# Default compatibility tool for every game, unless one was chosen (config.vdf CompatToolMapping "0").
+. /usr/local/share/mdeck/proton-armv8.conf
+has_default=$(awk '/"CompatToolMapping"/ {m=1; next} m && /\{/ {d++} m && /\}/ {d--; if (d <= 0) exit}
+  m && d == 1 && /^[ 	]*"0"[ 	]*$/ {print "yes"}' "$HOME/.local/share/Steam/config/config.vdf" 2>/dev/null)
+if [ -z "$has_default" ] && [ -f "$HOME/.local/share/Steam/compatibilitytools.d/$PROTON_NAME/proton" ]; then
+  mdeck eval "SteamClient.Settings.SpecifyGlobalCompatTool('$PROTON_NAME')" >/dev/null 2>&1 && echo "mdeck-steam-defaults: default compatibility tool $PROTON_NAME"
+fi
+# Steam maps every game it installs to Valve's Proton (LSE atomics, dies here); keep ours.
+pgrep -f '[s]xx-compat-default' >/dev/null || mdeck-compat-default >>"$HOME/steam-run.log" 2>&1 &
+until mdeck eval 'location.pathname' 2>/dev/null | grep -q '/library'; do sleep 10; done
+mdeck eval "$(cat /usr/local/share/mdeck/steam-defaults.js)" 2>&1 | tail -1 | sed 's/^/mdeck-steam-defaults: /'

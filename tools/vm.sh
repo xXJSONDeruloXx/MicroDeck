@@ -37,7 +37,7 @@ PY
 
 case "${1:-status}" in
   setup)
-    img=${2:?usage: tools/vm.sh setup <steamos-rg40xx.img.xz>}
+    img=${2:?usage: tools/vm.sh setup <microdeck-rg40xx.img.xz>}
     [ -f $Q/Image ] || bash tools/qemu/build-kernel.sh
     bash tools/qemu/prepare.sh "$img" ;;
   start)
@@ -66,7 +66,7 @@ case "${1:-status}" in
     case "${2:-updater}" in
       updater) python tests/qemu/update_flow.py "${@:3}" ;;
       reflash) python tests/qemu/reflash_reuse.py ;;
-      download) python tests/qemu/update_download.py "${3:-$Q/ci/steamos-rg40xx.img.xz}" ;;
+      download) python tests/qemu/update_download.py "${3:-$Q/ci/microdeck-rg40xx.img.xz}" ;;
       boot)    python tests/qemu/boot_smoke.py ;;
       *) echo "tests: updater | reflash | download | boot"; exit 2 ;;
     esac ;;

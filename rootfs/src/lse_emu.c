@@ -719,7 +719,7 @@ __attribute__((constructor)) static void init(void) {
     resolve();
     if (getauxval(AT_HWCAP) & HWCAP_ATOMICS) return;     // CPU has real LSE
     
-    // SteamOSXX: loaded from /etc/ld.so.preload on an ARMv8.0-only image, because Steam replaces
+    // MicroDeck: loaded from /etc/ld.so.preload on an ARMv8.0-only image, because Steam replaces
     // LD_PRELOAD (with its LSE-built overlay) for game launches. LSE_EMU=1 forces it on, LSE_EMU=0 off;
     // unset, it is on for every non-root process (Steam, its helpers and games run as a user).
     const char *emu_env = getenv("LSE_EMU");

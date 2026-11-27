@@ -108,8 +108,8 @@ change how we work also go into `lessons-learned.md`.
   the overlay.
 
 ### Automation (no hands on the device)
-- `sxx` (on the device, stdlib Python; DevTools client adapted from DroidDeck's droiddeck-agent):
-  `sxx targets`, `sxx eval [-t TARGET] JS`, `sxx pad TOKENS` (virtual "SteamOSXX Test Pad", uinput,
+- `mdeck` (on the device, stdlib Python; DevTools client adapted from DroidDeck's droiddeck-agent):
+  `mdeck targets`, `mdeck eval [-t TARGET] JS`, `mdeck pad TOKENS` (virtual "MicroDeck Test Pad", uinput,
   pid.codes 1209:5a5a, standard evdev codes; Steam maps it like the built-in pad).
 - Steam DevTools: `-cef-enable-debugging -devtools-port 8080` (from `CDP_PORT`), bound to 127.0.0.1 only.
   Targets in Big Picture: `SharedJSContext` (route, e.g. `/routes/library/home`), `Steam Big Picture Mode`
@@ -156,8 +156,8 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   Panfrost GL 3.1) and the ARMv8.0 Proton/FEX rebuilds from sunshineinabox/proton-armv8.
 - `steam-launch-wrapper` exports `VK_INSTANCE_LAYERS=VK_LAYER_VALVE_rpo:VK_LAYER_VALVE_fdm_injection` (Steam
   Frame VR layers) for every game on this client channel; harmless here so far.
-- Tools: `sxx-wrap` (launch-option wrapper: env + output to `/tmp/sxx-wrap-<appid>.log`),
-  `sxx-launch-debug` (run a game's chain by hand with Proton logging), `sxx eval
+- Tools: `mdeck-wrap` (launch-option wrapper: env + output to `/tmp/mdeck-wrap-<appid>.log`),
+  `mdeck-launch-debug` (run a game's chain by hand with Proton logging), `mdeck eval
   'SteamClient.Apps.RunGame("8400","",-1,100)'` and `SteamClient.Apps.SetAppLaunchOptions(...)` to drive it.
 
 ### Geometry Wars performance (640x480, Proton Experimental ARM64, FEX, stock settings)
@@ -168,7 +168,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
 - During play, zram swap is ~95 % full (926-969 of 974 MB) and `kswapd0` is busy; the game takes ~250-280 MB
   RSS and up to 277 % CPU. Steam's web helper keeps 70-85 % of a core rendering Big Picture behind the game.
 - The game's input arrives through Steam Input (`SteamVirtualGamepadInfo_Proton`); at 1-3 FPS a press must be
-  held longer than a frame (`sxx pad hold:a:1500`).
+  held longer than a frame (`mdeck pad hold:a:1500`).
 - DXVK stays the default (faster and correct). The real limits are CPU-side: FEX translation and software
   Vulkan. Levers: web helper priority during games, FEX TSO settings, ARMv8.0 Proton/FEX builds (no LSE traps),
   PanVK on the GPU.
@@ -179,7 +179,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   "Failed to export buffer to dma_buf" (display and GPU are separate DRM devices) but it still draws.
 - Within a few minutes the GPU process exited (code 512) and the whole client then exited (session restarted).
   The kernel showed `panfrost_gem_shrinker_scan` under memory pressure: GPU buffers come out of the same 1 GB.
-- `sxx-uibench` (12 pad moves over ~15 s): software 156-161 % web helper CPU; GPU 113-191 % (noisy).
+- `mdeck-uibench` (12 pad moves over ~15 s): software 156-161 % web helper CPU; GPU 113-191 % (noisy).
   No clear CPU win to justify the instability. Back to `CEF_GPU=0`; revisit with more free RAM (game mode,
   fewer web helper processes).
 
@@ -199,7 +199,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   - `MemoryMin=24M` + `OOMScoreAdjust=-900` for ssh, usb-gadget (adbd), reach-guard and earlyoom.
   - Tried and dropped: a 2 GB `/swapfile` behind zram, as SteamOS keeps one. On this device it shares the SD
     card with the root filesystem, so while it swapped every exec and file read queued behind swap I/O.
-    `sxx-memhog` (incompressible allocations) then held sshd's banner back for up to 50 s, and the extra 2 GB
+    `mdeck-memhog` (incompressible allocations) then held sshd's banner back for up to 50 s, and the extra 2 GB
     of swap kept earlyoom's swap-free threshold out of reach. With zram alone the kernel OOM killer (MGLRU
     `min_ttl_ms`) or earlyoom ends the hog.
   - `reach-guard` also watches PSI (`/proc/pressure/memory`, `full avg10` >= 30 % for 30 s) and then kills
@@ -221,7 +221,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   `STEAM_OVERLAY` windows are never base-layer candidates (they are composited on top). It publishes
   `GAMESCOPE_FOCUSABLE_APPS`, `GAMESCOPE_FOCUSABLE_WINDOWS` (`[xid, appid, pid]` triplets),
   `GAMESCOPE_FOCUSED_APP`, `_APP_GFX` and `_WINDOW` on the root. 413091 does not appear in its source.
-- `sxx-focus` does the same on Xorg, using `_NET_WM_PID` and activating the chosen window through openbox
+- `mdeck-focus` does the same on Xorg, using `_NET_WM_PID` and activating the chosen window through openbox
   (`_NET_ACTIVE_WINDOW` with the pager source, so focus-stealing prevention does not apply).
 
 ### Games in front of Big Picture, the SteamOS way (2026-11-24)
@@ -232,17 +232,17 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   on that socket, and Steam starts and runs normally.
 - With it, Steam builds the queue itself (sp.js `EnsureCorrectComposition`): Opaque gives `[769, game]`,
   otherwise `[game, 769]`, and the webhelper prefixes 413091. On launch the queue went
-  `[413091, 769, 8400]` -> `[413091, 8400, 769]` once the game window was focusable, and `sxx-focus` put the
+  `[413091, 769, 8400]` -> `[413091, 8400, 769]` once the game window was focusable, and `mdeck-focus` put the
   game in front with nothing pressed.
 - The webhelper turns the UI composition mode (`SteamClient.Window.SetComposition(mode, appids, window)`)
   into `STEAM_OVERLAY`, `STEAM_NOTIFICATION`, `STEAM_INPUT_FOCUS` on its window and the base-layer root
   properties.
 - Wine minimizes a fullscreen game that loses focus, and Geometry Wars stops (0 CPU) while minimized, so
-  `sxx-focus` treats iconified clients as focusable (gamescope never iconifies).
+  `mdeck-focus` treats iconified clients as focusable (gamescope never iconifies).
 - Steam's screensaver (a slideshow of the account's screenshots, `system_idle_screensaver_ac_sec=300`,
   `screensaver_while_ingame=true`) started during the slow launch. Its popup requests Opaque composition and
   pinned Big Picture over the game. Turned off through the client settings protobuf
-  (`SteamClient.Settings.SetSetting`, see `sxx-steam-defaults`).
+  (`SteamClient.Settings.SetSetting`, see `mdeck-steam-defaults`).
 - Hidden this way, the web helper uses about 4 % of one core behind a game (it was 70-85 % while Big Picture
   kept rendering on top). `game-mode` (SCHED_IDLE web helper) is removed: it starved the Steam button
   in game, and SteamOS has nothing like it.
@@ -251,13 +251,13 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   `watermark_scale_factor=125`. `PROTON_USE_XALIA=0` (xalia took ~14 % CPU per game).
 - Geometry Wars main menu on proton-armv8 11.0-3 (ARMv8.0 build, no LSE traps): 1.4-3.8 FPS.
 - In-game Steam button: Steam switches its window to `STEAM_OVERLAY=1`, `STEAM_INPUT_FOCUS=1` (gamescope's
-  overlay plane) and keeps the base layer on the game. `sxx-focus` raises an overlay window above the base
+  overlay plane) and keeps the base layer on the game. `mdeck-focus` raises an overlay window above the base
   window and gives it input focus while `STEAM_INPUT_FOCUS` is set. B returns to the game: Steam clears both
   properties and the game is activated again. Without a compositor the overlay's transparent parts are black.
 - The Steam menu takes 10-20 s to appear in game: the web helper's memory sits compressed in zram while it
-  is hidden. Memory census in game (`sxx-mem`, PSS + swap): Geometry Wars 441 MB, web helper 388 MB,
+  is hidden. Memory census in game (`mdeck-mem`, PSS + swap): Geometry Wars 441 MB, web helper 388 MB,
   Steam client 123 MB, Xorg 39 MB, Wine services ~90 MB. zram held 700 MB in 173 MB.
-- `sxx-gametest <appid>` runs the whole flow on the device. Geometry Wars: in front 88 s after launch,
+- `mdeck-gametest <appid>` runs the whole flow on the device. Geometry Wars: in front 88 s after launch,
   Steam menu +7 s, back in game +5 s, quit and Big Picture back +4 s. A second `RunGame` while the game runs
   leaves a "Game already running" dialog that holds Steam in Overlay composition (the test quits a running
   copy first).
@@ -347,7 +347,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   fails that CRC check, so Steam downloaded the manifest, called the package "uninstalled" and re-extracted ~1.4 GB
   (4-5 minutes, then the same again on the next start). Restarting a session through systemd (the 90 s stop timeout
   kills Steam) triggers it every time.
-- Fix: `run-steam.sh` restores the stock file (`patch-webhelper.py --restore`, from `~/.cache/sxx`) before Steam
+- Fix: `run-steam.sh` restores the stock file (`patch-webhelper.py --restore`, from `~/.cache/mdeck`) before Steam
   starts and patches it again when the updater logs "Verification complete" / "Update complete", before the client
   launches the web helper. A restart after an unclean stop now verifies for ~3 min and does not extract.
 - `steam-session.service` has `TimeoutStopSec=20`: Steam needs minutes to exit here and the 90 s default only delayed
@@ -355,9 +355,9 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
 
 ### First-install Proton default (2026-11-25)
 - The global default (`CompatToolMapping` entry "0") is not enough: when a game installs, Steam writes that game's own
-  mapping to Valve's pick, which wins, and Valve's Proton uses LSE atomics (dies on the A53). `sxx-compat-default`
-  (started by `sxx-steam-defaults`) watches config.vdf and moves any app Steam points at a Valve Proton to the ARMv8
-  build through `SteamClient.Apps.SpecifyCompatTool`, once per app (`~/.config/sxx/compat-handled.json`), so a tool
+  mapping to Valve's pick, which wins, and Valve's Proton uses LSE atomics (dies on the A53). `mdeck-compat-default`
+  (started by `mdeck-steam-defaults`) watches config.vdf and moves any app Steam points at a Valve Proton to the ARMv8
+  build through `SteamClient.Apps.SpecifyCompatTool`, once per app (`~/.config/mdeck/compat-handled.json`), so a tool
   chosen by hand afterwards sticks. Verified: Geometry Wars set to `proton-experimental` is back on
   `proton-armv8-proton-11.0-3` within 10 s. DroidDeck's `steam-compatibility` does the same job by rewriting
   config.vdf while Steam is stopped (its `valve_picks` and `plan_mapping`).
@@ -372,7 +372,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
 - Verdict: not usable on the H700. There is no compressing device, and a CPU-side software version has no way to
   keep compressed pages readable in place, so it would reduce to zswap-style fault-and-decompress. Revisit if the
   kernel grows a software backend.
-- What applies today, with what our kernel (7.2.0-sxx) already has: zram with lz4/zstd/lzo and `ZRAM_MULTI_COMP`
+- What applies today, with what our kernel (7.2.0-mdeck) already has: zram with lz4/zstd/lzo and `ZRAM_MULTI_COMP`
   (recompress idle pages with a stronger algorithm), `ZRAM_WRITEBACK`, MGLRU (`min_ttl_ms=1000` is set), PSI. Missing:
   `ZRAM_TRACK_ENTRY_ACTIME` (age-based idle marking) and `DAMON` / `DAMON_RECLAIM`, both cheap to add in `kernel/build.sh`.
 - Test plan (fixed workload, compare PSI `memory full`, swap-in rate, OOM events, `mm_stat` ratio): current zstd zram;
@@ -380,7 +380,7 @@ Launched from Steam, renders its intro. Four separate blockers, in the order the
   to the SD card with a `writeback_limit` to bound flash wear.
 
 ### zram algorithm and idle-page recompression (2026-11-26)
-`tools/membench.sh` reboots for each setting and runs `sxx-membench`: a synthetic load (`rootfs/src/memload.c`: 480 MB,
+`tools/membench.sh` reboots for each setting and runs `mdeck-membench`: a synthetic load (`rootfs/src/memload.c`: 480 MB,
 35 % random pages, 30 % hot, 200 s, beside idle Steam) or a real game. Steam refuses a launch while the account plays
 on another computer, so game runs need the account free.
 
@@ -395,11 +395,11 @@ on another computer, so game runs need the account free.
 
 - Throughput is unchanged (the hot set stays resident); the settings differ in stalls, CPU and capacity. zstd alone fits
   ~40 % more than lzo-rle/lz4 but stalls ~3x as long and spends ~2.7x the reclaim CPU.
-- lzo-rle live plus zstd recompression of idle pages (`sxx-zram-recompress`: mark all idle, wait 60 s, recompress what
+- lzo-rle live plus zstd recompression of idle pages (`mdeck-zram-recompress`: mark all idle, wait 60 s, recompress what
   stayed idle, niced at low CPU weight) keeps zstd's ratio with lzo-rle's stalls: -45 % stall time and -47 % kswapd CPU
   on the real game for the same start time. The service itself used ~4 % of one core on average during heavy swapping.
   Now the default (`zram-generator.conf`: `compression-algorithm = lzo-rle zstd`).
-- DAMON_RECLAIM (2026-11-26; kernel now has DAMON and `ZRAM_TRACK_ENTRY_ACTIME`; `sxx-damon-reclaim` sets cold pages at
+- DAMON_RECLAIM (2026-11-26; kernel now has DAMON and `ZRAM_TRACK_ENTRY_ACTIME`; `mdeck-damon-reclaim` sets cold pages at
   30 s, 16 MB/s, watermarks widened because the defaults switch it off below 20 % free memory, which is always on 1 GB).
   Synthetic benchmark, same boot procedure, memory stall (PSI some) in ms: baseline `lzo-rle zstd` 1404, 1417 (and 1062
   in a run where DAMON failed to enable); DAMON on 1188 and 3238, with workload rate -3 % and -11 % in the two runs and
@@ -432,15 +432,15 @@ on another computer, so game runs need the account free.
 ### Linux x86 games under FEX (2026-11-26)
 - Steam's own chain (Steam Linux Runtime 1.0 -> 2.0 -> Valve's `FEX` tool) needs SteamOS's `/usr/share/guestos/fex-mesa` guest OS
   and runs pressure-vessel itself under FEX, which cannot import the host's graphics here. We run FEX directly instead
-  (`sxx-fex`, a Steam compatibility tool): Steam Linux Runtime 4.0's x86 platform as the guest root, Valve's FEX GL/DRM/ALSA
+  (`mdeck-fex`, a Steam compatibility tool): Steam Linux Runtime 4.0's x86 platform as the guest root, Valve's FEX GL/DRM/ALSA
   thunks to the host Panfrost, and the old Steam Runtime ("scout") libraries only for what the root lacks (libvorbisfile.so.3,
   libopenal 1.16, libGLU ...).
 - `vm.overcommit_memory=1` is required: FEX reserves 4-6 GB per process and the default heuristic refuses any single mapping
   larger than RAM plus swap (`__vm_enough_memory` in dmesg), which made every fork inside FEX fail with ENOMEM.
-- SDL 1.2 games never set `_NET_WM_PID`, so `sxx-focus` could not tell whose window it was and Steam's UI stayed on top of a game
+- SDL 1.2 games never set `_NET_WM_PID`, so `mdeck-focus` could not tell whose window it was and Steam's UI stayed on top of a game
   that was running (sound, no window). It now asks the X server (XRes) for the owning process.
 - Steam applies a per-app compatibility-tool request from DevTools a minute or more later, and sometimes not at all; mappings for
-  Linux-only games are written into `config.vdf` before Steam starts (`sxx-compat-default --seed`), with the DevTools request as a
+  Linux-only games are written into `config.vdf` before Steam starts (`mdeck-compat-default --seed`), with the DevTools request as a
   second path.
 - Results: Hotline Miami (32-bit, Qt launcher + GameMaker GL) and Eets (64-bit, FNA GL on the Mali-G31) run; Hotline's window is
   up 22 s after launch, Eets in front in about 30 s.
@@ -453,13 +453,13 @@ on another computer, so game runs need the account free.
   in; `tools/qemu/build-kernel.sh`), with a stable SSH, serial log, display and monitor. CI boots every image the same way
   (`vm-boot` job, `tools/qemu/ci.sh`). The device-only units are masked in the VM (wifi-kick, zram, usb-gadget, reach-guard).
 - Bugs it found that the handheld could not show: `firstboot` built the data partition path as `<disk>p3` (wrong for `vda`), and
-  `sxx-ssh-import` skipped re-importing keys whenever its stored checksum matched, even if the installed key file was empty (a root
+  `mdeck-ssh-import` skipped re-importing keys whenever its stored checksum matched, even if the installed key file was empty (a root
   copied from a live filesystem). Also `reach-guard` reboots a VM that has no network after five minutes.
 - Passing: staged update install with trial (`tools/vm.sh test updater 1`), a release that does not boot is rolled back after three
-  boots with the failed tag recorded (2), `recovery.txt` with `sxx=previous` returns to the kept release (3). Not testable there:
+  boots with the failed tag recorded (2), `recovery.txt` with `mdeck=previous` returns to the kept release (3). Not testable there:
   anything that needs the H700, the Mali, Steam's UI, the pad, Wi-Fi or sleep.
 - Install speed: the install used to write the whole 3 GiB root (about ten minutes on the card). The updater now lists the 1 MiB chunks
-  that hold anything the new filesystem uses (`sxx-used-chunks`, from `dumpe2fs`' free-block map) and the initramfs writes only those:
+  that hold anything the new filesystem uses (`mdeck-used-chunks`, from `dumpe2fs`' free-block map) and the initramfs writes only those:
   1548 of 3072 MiB for a v0.5-era image, with the pruned image fewer. A block the new filesystem calls free is never read, so stale data
   there is harmless; metadata is never free. `tools/qemu/verify-chunks.sh` proves it on a real image by installing onto a random-filled
   target and requiring a clean `e2fsck -fn` and `diff -r` equal trees. The first version of the parser fell back to the whole image on an
@@ -468,7 +468,7 @@ on another computer, so game runs need the account free.
 ### Mesa 26.3.1 PanVK cross-build (2026-11-26)
 `tools/mesa/build.sh` builds Mesa 26.3.1 for arm64 in an amd64 container: the build-time tools (`mesa_clc`, `panfrost_compile`) are built
 natively with LLVM 19 first, then a cross build with `-Dvulkan-drivers=panfrost -Dgallium-drivers=panfrost -Dllvm=disabled
--Dplatforms=x11` into `/opt/mesa-sxx` (7 MB). Gotchas met: Debian 13's `wayland-scanner` is too old for Mesa's wayland-protocols 1.49 (so
+-Dplatforms=x11` into `/opt/mesa-mdeck` (7 MB). Gotchas met: Debian 13's `wayland-scanner` is too old for Mesa's wayland-protocols 1.49 (so
 X11 only, which is all the session uses), and the cross build needs `panfrost_compile` from a native Panfrost build. A Vulkan loader on a
 Debian arm64 userland finds the ICD (`panfrost_icd.cortex-a53.json`) and loads `libvulkan_panfrost.so` with no unresolved symbols; the
 only complaint is "no valid GPUs", as expected without a Mali. The test on the Mali-G31 itself is `tools/mesa/try-on-device.sh`.

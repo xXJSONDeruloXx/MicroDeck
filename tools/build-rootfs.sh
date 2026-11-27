@@ -10,7 +10,7 @@
 #   DEV_MODE=1 tools/build-rootfs.sh    development image: poweroff = reboot (to muOS), power key ignored (releases: off)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-REGISTRY=${BASE_REGISTRY:-ghcr.io/xxjsonderuloxx/steamos-rg40xx-base}
+REGISTRY=${BASE_REGISTRY:-ghcr.io/xxjsonderuloxx/microdeck-rg40xx-base}
 REGISTRY=${REGISTRY,,}
 [ -d cache/overlay ] || tools/fetch-rocknix.sh
 # A CRLF script or config in the image breaks at boot (`/bin/sh^M`); Windows editors and Python's text mode write them.
@@ -20,7 +20,7 @@ mkdir -p out
 
 # Everything the base layers read: the Dockerfile, LSE-Emu's source and the ROCKNIX download that supplies modules.
 hash=$(cat rootfs/Dockerfile rootfs/src/lse_emu.c tools/fetch-rocknix.sh | tr -d '\r' | sha256sum | cut -c1-12)
-local_base=steamos-rg40xx-base:$hash
+local_base=microdeck-rg40xx-base:$hash
 if docker image inspect "$local_base" >/dev/null 2>&1; then
   echo "== base $hash: local image"
 elif [ "${BASE_PULL:-1}" = 1 ] && docker pull --platform linux/arm64 "$REGISTRY:$hash" >/dev/null 2>&1; then
@@ -35,8 +35,8 @@ else
   fi
 fi
 
-docker build --platform linux/arm64 --build-arg BASE="$local_base" --build-arg DEV_MODE="${DEV_MODE:-0}" -t steamos-rg40xx-rootfs -f rootfs/Dockerfile.image .
-id=$(docker create --platform linux/arm64 steamos-rg40xx-rootfs)
+docker build --platform linux/arm64 --build-arg BASE="$local_base" --build-arg DEV_MODE="${DEV_MODE:-0}" -t microdeck-rg40xx-rootfs -f rootfs/Dockerfile.image .
+id=$(docker create --platform linux/arm64 microdeck-rg40xx-rootfs)
 trap 'docker rm -f "$id" >/dev/null' EXIT
 docker export "$id" -o out/rootfs.tar
 ls -la out/rootfs.tar

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Proactive reclaim of memory that has not been touched for MIN_AGE seconds (DAMON_RECLAIM), so cold pages move to zram
+# while the CPU is idle instead of during an allocation stall. The default watermarks switch it off below 20 % free memory,
+# which on 1 GB is always, so they are widened to keep it running.
+MIN_AGE=${MIN_AGE:-30}
+QUOTA_MB=${QUOTA_MB:-16}
+P=/sys/module/damon_reclaim/parameters
+[ -d $P ] || { echo "mdeck-damon-reclaim: no DAMON_RECLAIM in this kernel"; exit 1; }
+echo $((MIN_AGE * 1000000)) > $P/min_age
+echo $((QUOTA_MB * 1048576)) > $P/quota_sz
+echo 1000 > $P/quota_reset_interval_ms
+echo 1000 > $P/wmarks_high
+echo 999 > $P/wmarks_mid
+echo 0 > $P/wmarks_low
+echo N > $P/skip_anon
+echo Y > $P/enabled

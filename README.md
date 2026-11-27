@@ -1,6 +1,6 @@
-# SteamOSXX
+# MicroDeck
 
-SteamOS-style Linux for the Anbernic RG40XX-H and RG28XX (and, in time, other H700 handhelds).
+A Steam handheld OS for cheap ARM handhelds, SteamOS-style: the Anbernic RG40XX-H and RG28XX today, other H700 devices next. (Formerly SteamOSXX.)
 
 Valve's native **arm64 Steam client in Big Picture mode** on a $70 handheld: Anbernic RG40XX-H, Allwinner
 H700 (4x Cortex-A53, Mali-G31, 1 GB RAM, 640x480). A flashable SD-card OS built from a mainline kernel and a
@@ -24,16 +24,16 @@ brings KMS, Panfrost, PipeWire, user namespaces and SysV IPC.
 | Display | yes | DSI panel via sun4i-drm/KMS, Xorg modesetting + glamor on Panfrost |
 | GPU | partial | Panfrost GL 3.1 / GLES 3.1 (Mesa 26.1); PanVK Vulkan 1.0 for native programs (`panvk-run`), not enough for DXVK |
 | Steam | yes | `steamdeck_publicbeta` linuxarm64 client, `-gamepadui -steamos3`, LSE atomics emulated (ARMv8.0) |
-| Linux x86 games | works (first tests) | games with only a Linux build run through Valve's FEX with Steam's x86 runtime (`sxx-fex`, selected automatically); first one: Hotline Miami |
+| Linux x86 games | works (first tests) | games with only a Linux build run through Valve's FEX with Steam's x86 runtime (`mdeck-fex`, selected automatically); first one: Hotline Miami |
 | Games | yes, slow | Proton ARM64 (Valve's, or [proton-armv8](https://github.com/sunshineinabox/proton-armv8)) + FEX; Direct3D on the GPU through WineD3D/Panfrost (D3D10/11 need DXVK on llvmpipe, slow). See [docs/games.md](docs/games.md) |
-| SteamOS session | partial | gamescope's focus protocol on Xorg (`sxx-focus`): games in front, Steam button menu over them; power menu; brightness slider; volume |
+| SteamOS session | partial | gamescope's focus protocol on Xorg (`mdeck-focus`): games in front, Steam button menu over them; power menu; brightness slider; volume |
 | Audio | yes | H616 codec through PipeWire in the session; speaker and headphone jack |
 | Controls | yes | the built-in pad appears to Steam as a native Steam Deck controller (28de:1205, via InputPlumber and our kernel's USB/IP and HIDRAW); volume keys, menu+volume brightness |
 | Memory (1 GB) | managed | zstd zram at 2x RAM, earlyoom, MGLRU thrash guard, and a guard that ends a game on sustained memory stalls |
 | Wi-Fi | yes | RTL8821CS (rtw88), NetworkManager |
 | Bluetooth | yes | the same chip, bluez; Steam's Bluetooth page scans (pairing not yet tried), PipeWire audio |
-| Sleep / wake | opt-in | s2idle works (wake from the RTC verified, with a game running too); the power-button wake still needs a physical check on each handheld: `sxx-sleep on`, `sxx-sleep test` (docs/roadmap.md) |
-| gamescope | emulated | real gamescope runs on llvmpipe with a small shim but costs ~90 % of a core and crashes Steam here (docs/findings.md); Steam runs in its gamescope mode against Xorg + `sxx-focus` |
+| Sleep / wake | opt-in | s2idle works (wake from the RTC verified, with a game running too); the power-button wake still needs a physical check on each handheld: `mdeck-sleep on`, `mdeck-sleep test` (docs/roadmap.md) |
+| gamescope | emulated | real gamescope runs on llvmpipe with a small shim but costs ~90 % of a core and crashes Steam here (docs/findings.md); Steam runs in its gamescope mode against Xorg + `mdeck-focus` |
 | Standalone boot from slot 1 | yes | the same image boots from a card in slot 1 with no muOS or PC (2026-11-25); development still uses slot 2 through FEL |
 | First start | yes | downloads Valve's arm64 Steam client and the pinned ARMv8.0 Proton, with a progress window, and makes that Proton the default |
 
@@ -46,28 +46,28 @@ Boot ROM -> U-Boot SPL (LPDDR4 timings from the unit's own boot0) -> TF-A -> U-B
         -> Steam -gamepadui
 ```
 
-Card layout: U-Boot at 8 KiB, p1 FAT32 `STEAMBOOT` (kernel, DTBs, initramfs, `extlinux.conf`), p2 ext4
-`steamroot` (grown to the card on first boot).
+Card layout: U-Boot at 8 KiB, p1 FAT32 `MICRODECK` (kernel, DTBs, initramfs, `extlinux.conf`), p2 ext4
+`microdeck-root` (grown to the card on first boot).
 
 ## Install
 
 Tested on one RG40XX-H and one RG28XX (both LPDDR4). Other units may need different RAM timings (see the warning under
 [Building](#building)); a wrong one gives a dead, black boot and does no harm, so keep your stock card.
 
-1. Download the image for your handheld, `steamos-rg40xx.img.xz` or `steamos-rg28xx.img.xz`, and its `.sha256` from the latest release and check the hash.
+1. Download the image for your handheld, `microdeck-rg40xx.img.xz` or `microdeck-rg28xx.img.xz`, and its `.sha256` from the latest release and check the hash.
    The two differ only in U-Boot (the unit's RAM timings) and the device tree; the OS is the same, and each handheld updates itself with its own image.
-2. Write it to a microSD card of 16 GB or more (balenaEtcher, or `xzcat steamos-rg40xx.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync`).
-3. Wi-Fi: on the card's small `STEAMBOOT` partition copy `wifi.txt.example` to `wifi.txt` and fill in `ssid=` and
+2. Write it to a microSD card of 16 GB or more (balenaEtcher, or `xzcat microdeck-rg40xx.img.xz | sudo dd of=/dev/sdX bs=4M conv=fsync`).
+3. Wi-Fi: on the card's small `MICRODECK` partition copy `wifi.txt.example` to `wifi.txt` and fill in `ssid=` and
    `psk=` (add `band=a` to use 5 GHz only, usually much faster). The first start downloads about 1 GB (Valve's Steam client and a Proton build for this CPU).
 4. Put the card in **slot 1** (TF1, the boot slot) and power on. The first start grows the root partition to the
-   card, then shows a "Setting up SteamOSXX" progress window and Steam's own update screen: allow up to an hour (about 58 minutes on a home connection in the first test).
+   card, then shows a "Setting up MicroDeck" progress window and Steam's own update screen: allow up to an hour (about 58 minutes on a home connection in the first test).
 5. Sign in to Steam with the QR code. Games that need Proton use the ARMv8.0 build automatically.
    **RG28XX has no Wi-Fi.** It shows up as a USB network adapter when plugged into a PC (CDC-NCM, no driver on Windows 11, macOS or Linux),
    and the first start needs internet through it: on Windows run `tools/win-share-usb.ps1` from an elevated PowerShell (Internet
    Connection Sharing); on Linux or macOS share the PC's connection with the USB interface. The handheld answers at 169.254.58.58 even
    without sharing (SSH, `adb`).
 6. Optional SSH: copy `authorized_keys.example` to `authorized_keys` on the same partition and paste your public key;
-   it is installed at the next boot (`ssh root@rg40xx.local`).
+   it is installed at the next boot (`ssh root@microdeck-<device>.local`).
 
 If the card does not boot, U-Boot shows it to a connected PC as a USB drive so it can be rewritten. Hold the power
 button for 10-15 seconds to force an off.
@@ -77,8 +77,8 @@ button for 10-15 seconds to force an off.
 From the first release with an updater (the one after v0.3.0), update from Steam: **Settings > System > Check For Updates**.
 It downloads the newest release (about 340 MB), unpacks it to the data partition and installs it at the next restart,
 which takes about three minutes with a progress count on screen; do not power off. Your games, Proton, Steam login and the
-Wi-Fi and SSH settings stay (they live on the data partition, `sxxdata`, mounted at `/home`). From a shell: `sxx-update check`
-and `sxx-update apply`, then restart. A release that cannot be installed this way says so in its notes and needs a reflash. A new release that fails to start three times is replaced by the previous one automatically.
+Wi-Fi and SSH settings stay (they live on the data partition, `microdeck-data`, mounted at `/home`). From a shell: `mdeck-update check`
+and `mdeck-update apply`, then restart. A release that cannot be installed this way says so in its notes and needs a reflash. A new release that fails to start three times is replaced by the previous one automatically.
 
 Reflashing works too: write the new image to the same card, the same way. The data partition starts right after the 3 GiB
 root, so a flash only rewrites the boot and root partitions and the first boot after it reuses the data partition. This holds
@@ -94,7 +94,7 @@ Needs Docker (with arm64 emulation) and bash. Run from the repository root.
 tools/fetch-rocknix.sh        # ROCKNIX H700 release: kernel, DTBs, modules, firmware -> cache/
 uboot/build.sh card           # U-Boot for booting from slot 1 -> out/uboot/card.bin
 tools/build-rootfs.sh         # Debian arm64 userspace -> out/rootfs.tar
-tools/build-image.sh          # -> out/steamos-rg40xx.img
+tools/build-image.sh          # -> out/microdeck-rg40xx.img
 ```
 
 Before `build-rootfs.sh`, put your own `secrets/authorized_keys` (SSH public key) and Wi-Fi profiles in
@@ -119,10 +119,10 @@ The development setup keeps muOS in slot 1 as a known-good recovery system and t
 - `tools/rescue.sh` finds the device in any state and gets a shell back; `tools/dev.sh` runs commands and
   takes screenshots over adb or SSH; `tools/push-live.sh` applies the overlay to the running device.
 - `tools/backup-steam.sh` / `tools/restore-steam.sh` keep the Steam tree (games, Proton, login) across
-  reflashes; `tools/cycle.sh` chains build, flash, restore and test; `tools/reflash-slot2.sh` writes `out/steamos-rg40xx.img` to the slot-2 card and boots it.
-- `tools/smoke.sh` checks every area in one go; on the device, `sxx-gametest <appid>` launches a game from
+  reflashes; `tools/cycle.sh` chains build, flash, restore and test; `tools/reflash-slot2.sh` writes `out/microdeck-rg40xx.img` to the slot-2 card and boots it.
+- `tools/smoke.sh` checks every area in one go; on the device, `mdeck-gametest <appid>` launches a game from
   Steam and checks it comes to the front, the Steam menu opens over it and closes, and quitting returns
-  to Big Picture. `sxx eval` drives Steam's UI through DevTools; `sxx pad` presses buttons on a virtual pad.
+  to Big Picture. `mdeck eval` drives Steam's UI through DevTools; `mdeck pad` presses buttons on a virtual pad.
 
 A virtual device needs no hardware at all: `tools/vm.sh setup <image.img.xz>` once, then `tools/vm.sh start`, `sh`, `push`, `test`.
 It boots the real initramfs and image in QEMU on a generic arm64 kernel (systemd, firstboot, the data partition, the updater with its

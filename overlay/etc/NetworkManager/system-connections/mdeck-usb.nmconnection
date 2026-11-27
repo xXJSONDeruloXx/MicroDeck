@@ -1,0 +1,18 @@
+[connection]
+id=mdeck-usb
+type=ethernet
+interface-name=usb0
+autoconnect=true
+
+[ipv4]
+method=auto
+# faster than Wi-Fi, so preferred when both are up; the connection counts as up even if no PC is sharing yet
+route-metric=50
+may-fail=true
+dhcp-timeout=20
+# Windows and macOS give an unshared adapter a 169.254.x.x address, so this one is reachable (SSH) without any sharing set up
+address1=169.254.58.58/16
+
+[ipv6]
+# succeeds on its own, which is what lets the connection count as up while DHCP waits for a PC that shares
+method=link-local

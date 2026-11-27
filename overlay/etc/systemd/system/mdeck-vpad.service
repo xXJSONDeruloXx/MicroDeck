@@ -1,0 +1,9 @@
+[Unit]
+Description=MicroDeck virtual test pad (driven by "mdeck pad")
+
+[Service]
+ExecStart=/usr/local/bin/mdeck vpad-daemon
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

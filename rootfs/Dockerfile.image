@@ -1,23 +1,23 @@
 # The fast layer over the base (rootfs/Dockerfile): the repository's overlay, the C helpers, the SSH key and
 # Wi-Fi profiles from secrets/, and the service wiring. Everything here is cheap even under emulation.
-ARG BASE=steamos-rg40xx-base
+ARG BASE=microdeck-rg40xx-base
 # 1 = dev mode: poweroff/halt become reboot (back to muOS in slot 1) and the power key is ignored. Off for releases.
 ARG DEV_MODE=0
 FROM ${BASE}
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 COPY rootfs/src/padmap.c /usr/local/src/padmap.c
 RUN gcc -O2 -Wall -o /usr/local/bin/padmap /usr/local/src/padmap.c
-COPY rootfs/src/sxx-focus.c /usr/local/src/sxx-focus.c
-RUN gcc -O2 -Wall -o /usr/local/bin/sxx-focus /usr/local/src/sxx-focus.c -lX11 -lXRes
+COPY rootfs/src/mdeck-focus.c /usr/local/src/mdeck-focus.c
+RUN gcc -O2 -Wall -o /usr/local/bin/mdeck-focus /usr/local/src/mdeck-focus.c -lX11 -lXRes
 COPY rootfs/src/memload.c /usr/local/src/memload.c
 RUN gcc -O2 -Wall -o /usr/local/bin/memload /usr/local/src/memload.c
 COPY rootfs/src/vk-fake-drm.c /usr/local/src/vk-fake-drm.c
-RUN mkdir -p /usr/local/lib/sxx && gcc -O2 -Wall -shared -fPIC -o /usr/local/lib/sxx/vk-fake-drm.so /usr/local/src/vk-fake-drm.c -ldl
+RUN mkdir -p /usr/local/lib/mdeck && gcc -O2 -Wall -shared -fPIC -o /usr/local/lib/mdeck/vk-fake-drm.so /usr/local/src/vk-fake-drm.c -ldl
 COPY rootfs/src/reach-guard.c /usr/local/src/reach-guard.c
 RUN mkdir -p /usr/local/sbin && gcc -O2 -Wall -o /usr/local/sbin/reach-guard /usr/local/src/reach-guard.c
 
 COPY overlay/ /
-# Kernel 7.2.0-sxx (kernel/build.sh: ROCKNIX's H700 kernel plus HIDRAW, UHID and USB/IP): its module tree replaces the stock one.
+# Kernel 7.2.0-mdeck (kernel/build.sh: ROCKNIX's H700 kernel plus HIDRAW, UHID and USB/IP): its module tree replaces the stock one.
 COPY cache/kernel/modules/lib/modules/ /usr/lib/modules/
 # InputPlumber (CI-built) presents the built-in pad to Steam as a Steam Deck controller.
 COPY cache/inputplumber/ /
@@ -29,12 +29,12 @@ RUN chmod 700 /root/.ssh /home/steam/.ssh && chown -R steam:steam /home/steam/.s
  && find /etc/systemd /etc/ssh/sshd_config.d /etc/NetworkManager/conf.d /etc/steam-session.conf -type f -exec chmod 644 {} + \
  && chmod +x /usr/local/bin/* /usr/local/sbin/* /usr/lib/systemd/system-sleep/* /usr/bin/inputplumber \
  && systemctl enable ssh.service NetworkManager.service usb-gadget.service firstboot.service \
-      wifi-kick.service steam-session.service systemd-timesyncd.service reach-guard.service earlyoom.service handheld-keys.service sxx-wifi-import.service inputplumber.service sxx-zram-recompress.service bluetooth.service sxx-mark-good.service sxx-ui-fixes.service sxx-sleep-config.service sxx-battery.service \
+      wifi-kick.service steam-session.service systemd-timesyncd.service reach-guard.service earlyoom.service handheld-keys.service mdeck-wifi-import.service inputplumber.service mdeck-zram-recompress.service bluetooth.service mdeck-mark-good.service mdeck-ui-fixes.service mdeck-sleep-config.service mdeck-battery.service \
  && if [ "$DEV_MODE" = 1 ]; then \
-      systemctl enable sxx-vpad.service; \
+      systemctl enable mdeck-vpad.service; \
       ln -sfn /usr/lib/systemd/system/reboot.target /etc/systemd/system/poweroff.target; \
       ln -sfn /usr/lib/systemd/system/reboot.target /etc/systemd/system/halt.target; \
-      mkdir -p /etc/systemd/logind.conf.d && cp /usr/local/share/sxx/devmode/10-devmode.conf /etc/systemd/logind.conf.d/; \
+      mkdir -p /etc/systemd/logind.conf.d && cp /usr/local/share/mdeck/devmode/10-devmode.conf /etc/systemd/logind.conf.d/; \
     fi \
  && ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime \
  && systemctl set-default multi-user.target \

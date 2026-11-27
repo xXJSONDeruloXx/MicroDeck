@@ -8,7 +8,7 @@ set -uo pipefail
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 KEY=secrets/id_ed25519
-HOST=${DEV_HOST:-rg40xx.local}
+HOST=${DEV_HOST:-microdeck-rg40xx.local}
 PORT=${DEV_PORT:-22}
 SSH=(ssh -p "$PORT" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
 
@@ -18,7 +18,7 @@ adb_serial() {
   [ "${DEV_VIA:-}" = ssh ] && return 0
   [ -n "${DEV_SERIAL:-}" ] && { echo "$DEV_SERIAL"; return; }
   adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | while read -r s; do
-    [ "$(adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r')" = rg40xx ] && { echo "$s"; break; }
+    adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r' | grep -qE '^(microdeck-|rg40xx$)' && { echo "$s"; break; }
   done
 }
 

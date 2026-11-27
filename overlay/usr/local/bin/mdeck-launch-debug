@@ -1,0 +1,20 @@
+#!/bin/bash
+# Runs a Steam game's launch chain by hand, as the steam user inside the session, with Proton logging, so
+# its errors are visible. Usage (as root): mdeck-launch-debug APPID "Game Dir" game.exe [Proton dir name]
+set -u
+appid=$1 dir=$2 exe=$3 proton=${4:-Proton Experimental (ARM64)}
+S=/home/steam/.local/share/Steam
+C=$S/steamapps/common
+out=/tmp/mdeck-launch-$appid
+mkdir -p "$out" && chown steam:steam "$out"
+cd "$C/$dir" || exit 1
+exec runuser -u steam -- env -i HOME=/home/steam USER=steam PATH=/usr/local/bin:/usr/bin:/bin \
+  DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority XDG_RUNTIME_DIR=/run/user/1000 \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+  SteamAppId="$appid" SteamGameId="$appid" STEAM_COMPAT_APP_ID="$appid" \
+  STEAM_COMPAT_DATA_PATH="$S/steamapps/compatdata/$appid" STEAM_COMPAT_CLIENT_INSTALL_PATH="$S" \
+  STEAM_COMPAT_INSTALL_PATH="$C/$dir" STEAM_COMPAT_LIBRARY_PATHS="$S/steamapps" \
+  PROTON_LOG=1 PROTON_LOG_DIR="$out" PRESSURE_VESSEL_VERBOSE=1 \
+  LD_PRELOAD=/usr/local/lib/lse/liblse_emu.so LSE_EMU=1 LSE_EMU_PATCH=1 LSE_EMU_LOG="$out/lse_emu.log" \
+  "$C/SteamLinuxRuntime_4-arm64/_v2-entry-point" --verb=waitforexitandrun -- \
+  "$C/$proton/proton" waitforexitandrun "$C/$dir/$exe"

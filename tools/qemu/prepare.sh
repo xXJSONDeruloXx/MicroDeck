@@ -1,10 +1,10 @@
 #!/bin/bash
 # Makes a bootable copy of a release image for the QEMU virtual device: a larger raw disk plus our initramfs taken out of its boot
 # partition (the generic kernel from build-kernel.sh replaces the H700 kernel; everything after it is the real image).
-#   tools/qemu/prepare.sh <steamos-rg40xx.img.xz>  -> out/qemu/disk.img, out/qemu/initrd.cpio.gz
+#   tools/qemu/prepare.sh <microdeck-rg40xx.img.xz>  -> out/qemu/disk.img, out/qemu/initrd.cpio.gz
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-src=${1:?usage: tools/qemu/prepare.sh steamos-rg40xx.img.xz}
+src=${1:?usage: tools/qemu/prepare.sh microdeck-rg40xx.img.xz}
 mkdir -p out/qemu
 echo "== unpacking $src"
 xz -dc "$src" > out/qemu/disk.img

@@ -1,5 +1,5 @@
 #!/bin/busybox sh
-# Debug initramfs: logs the boot to the STEAMBOOT FAT partition, then switches to the real root.
+# Debug initramfs: logs the boot to the MICRODECK FAT partition, then switches to the real root.
 # Each boot writes bootlog-N.txt; read it later from muOS (/mnt/sdcard when the card is in slot 2).
 /bin/busybox --install -s /bin
 export PATH=/bin
@@ -10,7 +10,8 @@ mount -t devtmpfs dev /dev
 
 boot=
 for i in $(seq 1 40); do
-  boot=$(findfs LABEL=STEAMBOOT 2>/dev/null) && break
+  # the old label (STEAMBOOT) is what cards written before the rename carry
+  boot=$(findfs LABEL=MICRODECK 2>/dev/null || findfs LABEL=STEAMBOOT 2>/dev/null) && break
   sleep 0.5
 done
 if [ -n "$boot" ] && mount -t vfat -o rw,sync "$boot" /mnt/boot; then
@@ -27,18 +28,20 @@ note "block devices: $(ls /sys/class/block | tr '\n' ' ')"
 note "panels/drm: $(ls /sys/class/drm 2>/dev/null | tr '\n' ' ') backlight: $(ls /sys/class/backlight 2>/dev/null)"
 note "udc: $(ls /sys/class/udc 2>/dev/null)  net: $(ls /sys/class/net | tr '\n' ' ')"
 
-# OS update staged by sxx-update (on the data partition): write the new root over the old one, then the new boot files.
+# OS update staged by mdeck-update (on the data partition): write the new root over the old one, then the new boot files.
 # Nothing is mounted from the root yet, so it can be overwritten; if power fails midway, "pending" is still there and the
 # next boot does it again. The boot files go last, each through a temporary name and a rename.
 show() { echo "$*" > /dev/tty0 2>/dev/null; note "$*"; }
-data=$(findfs LABEL=sxxdata 2>/dev/null)
-u=/mnt/data/.sxx/update
+data=$(findfs LABEL=microdeck-data 2>/dev/null || findfs LABEL=sxxdata 2>/dev/null)
+u=/mnt/data/.mdeck/update
 if [ -n "$boot" ] && [ -n "$data" ] && mkdir -p /mnt/data && mount -t ext4 -o rw "$data" /mnt/data 2>/dev/null; then
-  # A freshly installed release is on trial until the system marks it good (sxx-update good, once Steam's UI has been up
+  # Cards from before the rename keep their state (update bookkeeping, SSH host keys) in /home/.sxx: move it once.
+  if [ -d /mnt/data/.sxx ] && [ ! -e /mnt/data/.mdeck ]; then mv /mnt/data/.sxx /mnt/data/.mdeck && sync && note "moved .sxx to .mdeck"; fi
+  # A freshly installed release is on trial until the system marks it good (mdeck-update good, once Steam's UI has been up
   # for a while). Boots that never get there are counted; after three, the previous release is installed again.
-  # recovery.txt on the boot partition (writable from any PC) with a line "sxx=previous" asks for the previous release now.
+  # recovery.txt on the boot partition (writable from any PC) with a line "mdeck=previous" asks for the previous release now.
   force=0
-  if [ -f /mnt/boot/recovery.txt ] && grep -q '^sxx=previous' /mnt/boot/recovery.txt; then
+  if [ -f /mnt/boot/recovery.txt ] && grep -q -E '^(mdeck|sxx)=previous' /mnt/boot/recovery.txt; then
     mv /mnt/boot/recovery.txt /mnt/boot/recovery.txt.used; sync
     force=1
     [ -f $u/previous/root.img ] || show "recovery.txt asks for the previous release, but none is kept: flash the image again"
@@ -46,7 +49,7 @@ if [ -n "$boot" ] && [ -n "$data" ] && mkdir -p /mnt/data && mount -t ext4 -o rw
   if { [ -f $u/trial ] || [ $force = 1 ]; } && [ ! -f $u/pending ]; then
     t=$(( $(cat $u/trial 2>/dev/null || echo 0) + 1 )); [ $force = 1 ] && t=99; [ -f $u/trial ] && echo $t > $u/trial; sync
     if [ $t -gt 3 ] && [ -f $u/previous/root.img ] && [ -d $u/previous/boot ]; then
-      show "SteamOSXX $(cat $u/installed/tag 2>/dev/null) is being replaced by $(cat $u/previous/tag)"
+      show "MicroDeck $(cat $u/installed/tag 2>/dev/null) is being replaced by $(cat $u/previous/tag)"
       cp $u/installed/tag $u/bad 2>/dev/null
       rm -rf $u/root.img $u/root.chunks $u/boot
       mv $u/previous/root.img $u/root.img; mv $u/previous/root.chunks $u/root.chunks 2>/dev/null; mv $u/previous/boot $u/boot; cp $u/previous/tag $u/pending
@@ -62,10 +65,10 @@ if [ -f $u/pending ] && [ -f $u/root.img ] && [ -d $u/boot ] && grep -q ' /mnt/d
     show "update $(cat $u/pending) failed $tries times, giving up"
     rm -f $u/pending
   elif [ -b "$newroot" ]; then
-    show "Installing SteamOSXX $(cat $u/pending). Do not power off."
+    show "Installing MicroDeck $(cat $u/pending). Do not power off."
     # the release being replaced, read before it is overwritten: only an image of that release is a valid rollback target
     oldrel=; mkdir -p /mnt/oldroot
-    if mount -t ext4 -o ro,noload "$newroot" /mnt/oldroot 2>/dev/null; then oldrel=$(cat /mnt/oldroot/etc/sxx-release 2>/dev/null); umount /mnt/oldroot; fi
+    if mount -t ext4 -o ro,noload "$newroot" /mnt/oldroot 2>/dev/null; then oldrel=$(cat /mnt/oldroot/etc/mdeck-release 2>/dev/null); umount /mnt/oldroot; fi
     mb=$(( $(stat -c %s $u/root.img) / 1048576 )); ok=1
     # root.chunks ("start count" in MiB) lists what the new filesystem uses; the rest of the root is free space, whatever it holds
     if [ -s $u/root.chunks ]; then
@@ -81,7 +84,7 @@ if [ -f $u/pending ] && [ -f $u/root.img ] && [ -d $u/boot ] && grep -q ' /mnt/d
         n=64; [ $((count - i)) -lt 64 ] && n=$((count - i))
         dd if=$u/root.img of=$newroot bs=1M skip=$((start + i)) seek=$((start + i)) count=$n conv=notrunc status=none 2>>"$log" || ok=0
         i=$((i + n)); done_mb=$((done_mb + n))
-        echo "SteamOSXX update: $((done_mb * 100 / mb)) %" > /dev/tty0 2>/dev/null
+        echo "MicroDeck update: $((done_mb * 100 / mb)) %" > /dev/tty0 2>/dev/null
       done
     done < $chunklist
     rm -f $u/root.chunks.all
@@ -94,7 +97,7 @@ if [ -f $u/pending ] && [ -f $u/root.img ] && [ -d $u/boot ] && grep -q ' /mnt/d
       cp $u/boot/KERNEL /mnt/boot/KERNEL.new && sync && mv /mnt/boot/KERNEL.new /mnt/boot/KERNEL
       cp $u/boot/extlinux/extlinux.conf /mnt/boot/extlinux/extlinux.conf.new && sync && mv /mnt/boot/extlinux/extlinux.conf.new /mnt/boot/extlinux/extlinux.conf
       sync
-      show "SteamOSXX $(cat $u/pending) installed, restarting"
+      show "MicroDeck $(cat $u/pending) installed, restarting"
       # keep what was just installed (the rollback target of the next update) and put the release on trial
       rm -rf $u/previous
       if [ -d $u/installed ] && [ "$(cat $u/installed/tag 2>/dev/null)" = "$oldrel" ]; then mv $u/installed $u/previous; else rm -rf $u/installed; fi
@@ -110,7 +113,7 @@ umount /mnt/data 2>/dev/null
 
 root=
 for i in $(seq 1 40); do
-  root=$(findfs LABEL=steamroot 2>/dev/null) && break
+  root=$(findfs LABEL=microdeck-root 2>/dev/null || findfs LABEL=steamroot 2>/dev/null) && break
   sleep 0.5
 done
 note "root device: ${root:-not found}"

@@ -1,0 +1,44 @@
+#!/bin/bash
+# Repeatable memory benchmark for comparing zram/kernel settings. Two workloads:
+#   mdeck-membench <label> [seconds=200] synthetic   memload (rootfs/src/memload.c) beside Steam: compressible and random
+#                                                  pages with a hot working set; reports touches per second
+#   mdeck-membench <label> [seconds=200] <appid>     launches that Steam game through mdeck-gametest (needs the account to be
+#                                                  free: Steam refuses a launch while it plays on another computer)
+# Appends a CSV row to /var/tmp/membench.csv and prints the file: algorithm, workload result, PSI memory stall time during
+# the run, swap traffic (pages), zram compression ratio, peak swap use and kswapd CPU seconds. Start from a settled
+# system (Steam at the library); tools/membench.sh reboots between settings so every run starts the same way.
+label=${1:?label}
+secs=${2:-200}
+app=${3:-synthetic}
+algo=$(cat /sys/block/zram0/comp_algorithm 2>/dev/null | sed 's/.*\[\(.*\)\].*/\1/')
+vm() { awk -v k="$1" '$1 == k {print $2}' /proc/vmstat; }
+psi() { awk -v t="$1" '$1 == t {for (i = 2; i <= NF; i++) if ($i ~ /^total=/) {sub("total=", "", $i); print $i}}' /proc/pressure/memory; }
+kswapd_cpu() { for p in $(pgrep kswapd); do awk '{s += $14 + $15} END {print s}' /proc/$p/stat; done | awk '{s += $1} END {print s / 100}'; }
+in0=$(vm pswpin); out0=$(vm pswpout); some0=$(psi some); full0=$(psi full); k0=$(kswapd_cpu)
+peak=0
+if [ "$app" = synthetic ]; then
+  workload=$(memload "${MEMLOAD_MB:-480}" "${MEMLOAD_HOT:-30}" "$secs" 2>&1 | grep -o 'touches_per_s=[0-9]*' | cut -d= -f2)
+  workload=${workload:-killed}
+  peak=$(free -m | awk '/^Swap:/ {print $3}')
+else
+  mdeck eval "SteamClient.Apps.TerminateApp('$app', false)" >/dev/null 2>&1
+  sleep 5
+  (mdeck-gametest "$app" > /var/tmp/membench-gametest.log 2>&1 &)
+  end=$((SECONDS + secs))
+  while [ $SECONDS -lt $end ]; do
+    used=$(free -m | awk '/^Swap:/ {print $3}')
+    [ "$used" -gt "$peak" ] && peak=$used
+    sleep 3
+  done
+  workload=$(grep -o 'in front.*after [0-9]*s' /var/tmp/membench-gametest.log | grep -o '[0-9]*s$' | head -1)
+  workload=${workload:-no-launch}
+  mdeck eval "SteamClient.Apps.TerminateApp('$app', false)" >/dev/null 2>&1
+fi
+mm=$(cat /sys/block/zram0/mm_stat)
+ratio=$(echo "$mm" | awk '{if ($2 > 0) printf "%.2f", $1 / $2; else print "n/a"}')
+row=$(printf '%s,%s,%s,%s,%d,%d,%d,%d,%s,%s,%s' "$label" "$algo" "$app" "$workload" \
+  $(( ($(psi some) - some0) / 1000 )) $(( ($(psi full) - full0) / 1000 )) \
+  $(( $(vm pswpin) - in0 )) $(( $(vm pswpout) - out0 )) "$ratio" "$peak" "$(awk -v a="$(kswapd_cpu)" -v b="$k0" 'BEGIN {printf "%.1f", a - b}')")
+[ -f /var/tmp/membench.csv ] || echo "label,algo,workload,result,psi_some_ms,psi_full_ms,pswpin,pswpout,zram_ratio,peak_swap_mb,kswapd_cpu_s" > /var/tmp/membench.csv
+echo "$row" >> /var/tmp/membench.csv
+cat /var/tmp/membench.csv

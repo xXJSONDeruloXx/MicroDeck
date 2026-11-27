@@ -1,0 +1,7 @@
+#!/bin/sh
+# Steam compatibility tool entry point: mdeck-fex-tool <verb> -- <game command...>
+# The game's output goes to ~/.local/share/mdeck-fex/last.log (Steam keeps none for native games).
+shift
+[ "$1" = "--" ] && shift
+mkdir -p "$HOME/.local/share/mdeck-fex"
+exec /usr/local/bin/mdeck-fex run -- "$@" > "$HOME/.local/share/mdeck-fex/last.log" 2>&1

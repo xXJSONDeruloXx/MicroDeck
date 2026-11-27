@@ -10,7 +10,7 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 TAR=${1:-cache/steam-backup.tar}
 PORT=${RESTORE_PORT:-19001}
-s=$(adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | while read -r d; do [ "$(adb -s "$d" shell cat /etc/hostname | tr -d '\r')" = rg40xx ] && echo "$d" && break; done)
+s=$(adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}' | while read -r d; do adb -s "$d" shell cat /etc/hostname | tr -d '\r' | grep -qE '^(microdeck-|rg40xx$)' && echo "$d" && break; done)
 [ -n "$s" ] || { echo "device not on adb"; exit 1; }
 [ -f "$TAR" ] || { echo "no $TAR"; exit 1; }
 cat > out/recv.py <<'EOS'

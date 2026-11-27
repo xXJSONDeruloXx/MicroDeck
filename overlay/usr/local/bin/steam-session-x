@@ -1,6 +1,6 @@
 #!/bin/bash
 # X session client, run by startx as the steam user: window manager, then Steam.
-/usr/local/bin/sxx-rotate
+/usr/local/bin/mdeck-rotate
 xset s off -dpms 2>/dev/null
 # Mirrors SteamOS's gamescope-session (--hide-cursor-delay 3000): the cursor starts hidden, shows when
 # something moves the pointer (Steam's guide + right stick chord), and hides again after 3 s idle.
@@ -11,8 +11,8 @@ if [ "${NESTED_GAMESCOPE:-0}" = 1 ]; then
   # Real gamescope as a fullscreen client of this Xorg, on llvmpipe (the Mali's PanVK lacks what it needs).
   # vk-fake-drm adds the one extension llvmpipe lacks; Steam and its games run in gamescope's Xwayland.
   export PATH=/usr/games:$PATH
-  exec env LD_PRELOAD=/usr/local/lib/sxx/vk-fake-drm.so:/usr/local/lib/lse/liblse_emu.so     gamescope --backend sdl -W 640 -H 480 -r 60 -f -e --hide-cursor-delay 3000 -- /usr/local/bin/run-steam.sh
+  exec env LD_PRELOAD=/usr/local/lib/mdeck/vk-fake-drm.so:/usr/local/lib/lse/liblse_emu.so     gamescope --backend sdl -W 640 -H 480 -r 60 -f -e --hide-cursor-delay 3000 -- /usr/local/bin/run-steam.sh
 fi
 # Gamescope-style focus: Steam picks which app is on top through GAMESCOPECTRL_BASELAYER_APPID.
-sxx-focus &
+mdeck-focus &
 exec /usr/local/bin/run-steam.sh

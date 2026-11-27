@@ -14,7 +14,7 @@ display=(-display none)
 [ "${VM_DISPLAY:-0}" = 1 ] && display=(-display sdl)
 exec "$QEMU" -M virt "${accel[@]}" -smp 4 -m "${VM_MEM:-2048}" \
   -kernel out/qemu/Image -initrd out/qemu/initrd.cpio.gz \
-  -append "root=PARTUUID=53544d52-02 rootwait rw init=/lib/systemd/systemd console=ttyAMA0 panic=-1 loglevel=4 systemd.zram=0 systemd.mask=wifi-kick.service systemd.mask=sxx-zram-recompress.service systemd.mask=usb-gadget.service systemd.mask=reach-guard.service ${VM_CMDLINE:-}" \
+  -append "root=PARTUUID=53544d52-02 rootwait rw init=/lib/systemd/systemd console=ttyAMA0 panic=-1 loglevel=4 systemd.zram=0 systemd.mask=wifi-kick.service systemd.mask=mdeck-zram-recompress.service systemd.mask=usb-gadget.service systemd.mask=reach-guard.service ${VM_CMDLINE:-}" \
   -drive file=out/qemu/disk.img,if=none,format=raw,id=d0 -device virtio-blk-pci,drive=d0 \
   -netdev user,id=n0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=n0 \
   -device virtio-gpu-pci -device usb-ehci -device usb-kbd -device usb-tablet "${display[@]}" \

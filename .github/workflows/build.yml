@@ -61,7 +61,7 @@ jobs:
         with: {name: kernel, path: out/dl-kernel}
       - uses: actions/download-artifact@v4
         with: {name: inputplumber, path: out/dl-inputplumber}
-      - name: Our kernel (7.2.0-sxx) and InputPlumber, where the image build looks for them
+      - name: Our kernel (7.2.0-mdeck) and InputPlumber, where the image build looks for them
         run: |
           mkdir -p cache/kernel cache/inputplumber
           tar -xJf out/dl-kernel/kernel.tar.xz -C cache/kernel
@@ -71,7 +71,7 @@ jobs:
       - run: bash tools/build-rootfs.sh
         env:
           PUSH_BASE: ${{ github.event_name != 'pull_request' && '1' || '0' }}
-          BASE_REGISTRY: ghcr.io/${{ github.repository_owner }}/steamos-rg40xx-base
+          BASE_REGISTRY: ghcr.io/${{ github.repository_owner }}/microdeck-rg40xx-base
       - uses: actions/upload-artifact@v4
         with:
           name: rootfs
@@ -98,14 +98,14 @@ jobs:
       - run: bash tools/build-image.sh
         env:
           DEVICE: ${{ matrix.device }}
-          SXX_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
-      - run: sudo chown -R "$(id -u):$(id -g)" out && xz -T0 -6 out/steamos-${{ matrix.device }}.img && (cd out && sha256sum steamos-${{ matrix.device }}.img.xz | tee steamos-${{ matrix.device }}.img.xz.sha256)
+          MDECK_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+      - run: sudo chown -R "$(id -u):$(id -g)" out && xz -T0 -6 out/microdeck-${{ matrix.device }}.img && (cd out && sha256sum microdeck-${{ matrix.device }}.img.xz | tee microdeck-${{ matrix.device }}.img.xz.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: image-${{ matrix.device }}
           path: |
-            out/steamos-${{ matrix.device }}.img.xz
-            out/steamos-${{ matrix.device }}.img.xz.sha256
+            out/microdeck-${{ matrix.device }}.img.xz
+            out/microdeck-${{ matrix.device }}.img.xz.sha256
             out/uboot/*.bin
 
   release:
@@ -123,10 +123,10 @@ jobs:
           draft: true
           body_path: docs/release-notes/${{ github.ref_name }}.md
           files: |
-            out/steamos-rg40xx.img.xz
-            out/steamos-rg40xx.img.xz.sha256
-            out/steamos-rg28xx.img.xz
-            out/steamos-rg28xx.img.xz.sha256
+            out/microdeck-rg40xx.img.xz
+            out/microdeck-rg40xx.img.xz.sha256
+            out/microdeck-rg28xx.img.xz
+            out/microdeck-rg28xx.img.xz.sha256
             out/uboot/fel-boot.bin
             out/uboot/fel-reset.bin
             out/uboot/fel-boot-rg28xx.bin
@@ -150,9 +150,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p out/prev
-          if gh release download --repo "$GITHUB_REPOSITORY" -p 'steamos-rg40xx.img.xz' -D out/prev; then echo "found=1" >> "$GITHUB_OUTPUT"; fi
+          # releases before the rename call it steamos-rg40xx.img.xz, later ones microdeck-rg40xx.img.xz
+          if gh release download --repo "$GITHUB_REPOSITORY" -p '*rg40xx.img.xz' -D out/prev; then echo "found=1" >> "$GITHUB_OUTPUT"; fi
       - if: steps.prev.outputs.found == '1'
-        run: bash tools/qemu/ci.sh out/steamos-rg40xx.img.xz out/prev/steamos-rg40xx.img.xz
+        run: bash tools/qemu/ci.sh out/microdeck-rg40xx.img.xz "$(ls out/prev/*rg40xx.img.xz | head -1)"
         env:
           EXPECT_RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
 
@@ -167,4 +168,4 @@ jobs:
         with:
           path: cache/qemu/Image
           key: qemu-kernel-${{ hashFiles('tools/qemu/ci.sh') }}
-      - run: bash tools/qemu/ci.sh out/steamos-rg40xx.img.xz
+      - run: bash tools/qemu/ci.sh out/microdeck-rg40xx.img.xz

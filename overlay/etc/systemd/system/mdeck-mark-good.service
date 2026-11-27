@@ -1,0 +1,10 @@
+[Unit]
+Description=Mark the running release good once Steam's UI is up
+After=steam-session.service
+
+[Service]
+ExecStart=/usr/local/sbin/mdeck-mark-good
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

@@ -7,7 +7,7 @@ import helpers
 
 class BatteryTest(unittest.TestCase):
     def setUp(self):
-        self.mod = helpers.load("battery", "usr", "local", "sbin", "sxx-battery")
+        self.mod = helpers.load("battery", "usr", "local", "sbin", "mdeck-battery")
 
     def test_decisions(self):
         d = self.mod.decide

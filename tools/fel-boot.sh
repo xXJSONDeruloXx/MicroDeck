@@ -24,10 +24,10 @@ fi
 "$FEL" ver | grep AWUSBFEX || { step "FEL did not appear"; exit 1; }
 step "loading $UBOOT over FEL"
 "$FEL" -p uboot "$UBOOT" || { step "sunxi-fel failed"; exit 1; }
-step "U-Boot started; waiting for the OS (adb hostname rg40xx) or the slot-2 card over USB"
+step "U-Boot started; waiting for the OS (adb hostname microdeck-<device>) or the slot-2 card over USB"
 for i in $(seq 1 90); do
   for s in $(adb devices | awk '$2=="device" && !/tls/ {print $1}'); do
-    [ "$(adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r')" = rg40xx ] && { step "OS up on adb $s"; exit 0; }
+    adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r' | grep -qE '^(microdeck-|rg40xx$)' && { step "OS up on adb $s"; exit 0; }
   done
   powershell -NoProfile -Command "Get-PnpDevice -PresentOnly | Where-Object InstanceId -like 'USB\VID_1F3A&PID_1010*'" 2>/dev/null | grep -q 1010 && { step "U-Boot is exposing the slot-2 card over USB (boot failed)"; exit 2; }
   sleep 4

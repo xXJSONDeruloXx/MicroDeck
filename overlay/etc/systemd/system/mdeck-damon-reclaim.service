@@ -1,0 +1,12 @@
+[Unit]
+Description=Proactive reclaim of cold memory with DAMON
+After=systemd-zram-setup@zram0.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/mdeck-damon-reclaim
+ExecStop=/bin/sh -c 'echo N > /sys/module/damon_reclaim/parameters/enabled'
+
+[Install]
+WantedBy=multi-user.target

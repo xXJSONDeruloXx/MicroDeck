@@ -1,8 +1,8 @@
 #!/bin/bash
 # Boots a built image in QEMU on a CI runner (ubuntu-24.04-arm) and runs the boot smoke test. Natively builds the generic kernel
 # (cached by the workflow) so no cross compiler is needed.
-#   tools/qemu/ci.sh out/steamos-rg40xx.img.xz                       boot smoke test of that image
-#   tools/qemu/ci.sh out/steamos-rg40xx.img.xz <previous.img.xz>    boot the PREVIOUS release and update it in place to the first image
+#   tools/qemu/ci.sh out/microdeck-rg40xx.img.xz                       boot smoke test of that image
+#   tools/qemu/ci.sh out/microdeck-rg40xx.img.xz <previous.img.xz>    boot the PREVIOUS release and update it in place to the first image
 #                                                                   (the old release's own updater and initramfs do the install, as for a user)
 set -euo pipefail
 cd "$(dirname "$0")/../.."

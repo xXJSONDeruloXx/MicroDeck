@@ -1,12 +1,12 @@
 #!/bin/bash
-# Assembles out/steamos-<device>.img from U-Boot + kernel + DTB and our rootfs; the root filesystem is the same for every device.
+# Assembles out/microdeck-<device>.img from U-Boot + kernel + DTB and our rootfs; the root filesystem is the same for every device.
 #   DEVICE=rg40xx|rg28xx tools/build-image.sh     (default rg40xx; runs itself inside an amd64 Debian container)
-# Layout: MBR (disk id 53544d52), U-Boot at 8 KiB, p1 FAT32 "STEAMBOOT" 256 MiB at 16 MiB,
-#         p2 ext4 "steamroot" sized to its contents (grown to the card on first boot).
+# Layout: MBR (disk id 53544d52), U-Boot at 8 KiB, p1 FAT32 "MICRODECK" 256 MiB at 16 MiB,
+#         p2 ext4 "microdeck-root" sized to its contents (grown to the card on first boot).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 if [ ! -f /.dockerenv ]; then
-  exec env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -e STEAM_SEED -e UBOOT -e DTB -e DEVICE -e SXX_VERSION -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w \
+  exec env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -e STEAM_SEED -e UBOOT -e DTB -e DEVICE -e MDECK_VERSION -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w \
     debian:trixie bash -c 'export DEBIAN_FRONTEND=noninteractive; dpkg --add-architecture arm64; apt-get update -qq >/dev/null;
       apt-get install -y -qq e2fsprogs dosfstools mtools fdisk cpio >/dev/null 2>&1; tools/build-image.sh'
 fi
@@ -22,11 +22,14 @@ rm -rf $work && mkdir -p $work/root $work/boot/extlinux $work/boot/dtbs
 echo "== unpacking rootfs"
 tar -C $work/root -xpf out/rootfs.tar --numeric-owner
 rm -f $work/root/.dockerenv
-# the release tag when CI builds one (sxx-update compares against it); "dev" is never offered an update
-echo "${SXX_VERSION:-dev}" > $work/root/etc/sxx-release
-echo "$DEVICE" > $work/root/etc/sxx-device   # which release asset sxx-update downloads
+# the release tag when CI builds one (mdeck-update compares against it); "dev" is never offered an update
+echo "${MDECK_VERSION:-dev}" > $work/root/etc/mdeck-release
+echo "$DEVICE" > $work/root/etc/mdeck-device   # which release asset mdeck-update downloads
 # docker export leaves the container-managed files empty
 cp overlay/etc/hostname overlay/etc/hosts $work/root/etc/
+# one name per handheld, so two on the same network (or the same PC) can be told apart: microdeck-rg40xx, microdeck-rg28xx
+echo "microdeck-$DEVICE" > $work/root/etc/hostname
+sed -i "s/^127.0.1.1 .*/127.0.1.1 microdeck-$DEVICE/" $work/root/etc/hosts
 rm -f $work/root/etc/resolv.conf && ln -s ../run/NetworkManager/resolv.conf $work/root/etc/resolv.conf
 # STEAM_SEED: a clean client from tools/fetch-steam.sh for release images; cache/steam-home.tar (a dev
 # install, with its login) is the default for the dev card.
@@ -38,7 +41,7 @@ if [ -f "$seed" ]; then
 fi
 
 echo "== boot partition"
-# Our kernel (kernel/build.sh, 7.2.0-sxx: HIDRAW, UHID, USB/IP) when cache/kernel has it, else ROCKNIX's stock 7.2.0.
+# Our kernel (kernel/build.sh, 7.2.0-mdeck: HIDRAW, UHID, USB/IP) when cache/kernel has it, else ROCKNIX's stock 7.2.0.
 if [ -f cache/kernel/KERNEL ]; then
   cp cache/kernel/KERNEL $work/boot/KERNEL
 else
@@ -83,7 +86,7 @@ cat > $work/boot/authorized_keys.example <<EOF
 EOF
 boot_mb=256
 truncate -s ${boot_mb}M $work/boot.img
-mkfs.vfat -F 32 -n STEAMBOOT -i 53544d52 $work/boot.img >/dev/null
+mkfs.vfat -F 32 -n MICRODECK -i 53544d52 $work/boot.img >/dev/null
 mcopy -s -i $work/boot.img $work/boot/* ::/
 
 echo "== root partition"
@@ -92,10 +95,10 @@ used_mb=$(du -sm $work/root | cut -f1)
 # image, which is what lets a reflash find the previous one.
 root_mb=3072
 [ "$used_mb" -lt 2600 ] || { echo "root is ${used_mb} MB, too big for the fixed ${root_mb} MB root"; exit 1; }
-mke2fs -q -t ext4 -L steamroot -m 1 -E root_owner=0:0 -d $work/root $work/root.img ${root_mb}M
+mke2fs -q -t ext4 -L microdeck-root -m 1 -E root_owner=0:0 -d $work/root $work/root.img ${root_mb}M
 
 echo "== disk image"
-out=out/steamos-$DEVICE.img
+out=out/microdeck-$DEVICE.img
 # The image must end exactly where the root ends: flashing it must not touch the data partition that follows.
 total_mb=$(( 16 + boot_mb + root_mb ))
 rm -f $out && truncate -s ${total_mb}M $out

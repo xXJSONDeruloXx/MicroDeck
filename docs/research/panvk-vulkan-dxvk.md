@@ -1,6 +1,6 @@
 # Bifrost PanVK, Vulkan 1.3 and hardware DXVK (research plan)
 
-Source: a research note shared by the project owner (gist `steamosxx-panvk-research.md`, snapshot 2026-11-26). Proposed
+Source: a research note shared by the project owner (gist `microdeck-panvk-research.md`, snapshot 2026-11-26). Proposed
 work, not tested here; every claim about other projects is theirs, not an H700 result.
 
 ## Where we stand (verified in this repo)
@@ -40,7 +40,7 @@ emulation.
 - Test gates: native feature microtests and applicable dEQP/VK-GL-CTS cases, then a pinned legacy DXVK with a light D3D9 title
   (logs must name the Mali, not llvmpipe), then FPS/correctness/CPU/RAM/thermals; D3D11 and Gamescope only after that.
 
-## Measured on the Mali-G31 (2026-11-27, `tools/mesa/try-on-device.sh`, RG28XX, Mesa 26.3.1 prefix in `/opt/mesa-sxx`)
+## Measured on the Mali-G31 (2026-11-27, `tools/mesa/try-on-device.sh`, RG28XX, Mesa 26.3.1 prefix in `/opt/mesa-mdeck`)
 PanVK finds the GPU and reports **Vulkan 1.3.363** (device `Mali-G31 MC1`, driver `panvk`, `PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1`), against
 Vulkan 1.0.354 from the system Mesa 26.1.6. Needs `XAUTHORITY` for vulkaninfo's X surface and `libxcb-keysyms1`.
 

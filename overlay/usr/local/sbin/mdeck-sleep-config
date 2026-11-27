@@ -1,0 +1,19 @@
+#!/bin/sh
+# Sleep (s2idle) is opt-in until waking by the power button has been confirmed on the unit: an empty file named "sleep" on the
+# boot partition (MICRODECK) turns it on, `mdeck-sleep on` writes it. The files go to /run so they last one boot and an update of the
+# root never carries a stale setting.
+rm -f /run/systemd/sleep.conf.d/50-mdeck.conf /run/systemd/logind.conf.d/50-mdeck.conf
+[ -f /boot/firmware/sleep ] || exit 0
+mkdir -p /run/systemd/sleep.conf.d /run/systemd/logind.conf.d
+cat > /run/systemd/sleep.conf.d/50-mdeck.conf <<CONF
+[Sleep]
+AllowSuspend=yes
+SuspendState=freeze
+MemorySleepMode=s2idle
+CONF
+# a short press sleeps, a long press still powers off
+cat > /run/systemd/logind.conf.d/50-mdeck.conf <<CONF
+[Login]
+HandlePowerKey=suspend
+HandlePowerKeyLongPress=poweroff
+CONF

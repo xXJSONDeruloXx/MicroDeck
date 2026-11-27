@@ -24,15 +24,15 @@ check audio-sink     'runuser -u steam -- env XDG_RUNTIME_DIR=/run/user/1000 wpc
 check battery        'upower -i /org/freedesktop/UPower/devices/battery_battery | grep percentage' '%'
 check gamepad        'grep -c "H700 Gamepad" /proc/bus/input/devices' '[1-9]'
 check pad-not-in-x   'udevadm info /dev/input/by-path/*joypad*event* 2>/dev/null | grep -c LIBINPUT_IGNORE_DEVICE=1 || udevadm info -q property -n $(grep -l "H700 Gamepad" /sys/class/input/event*/device/name | sed "s|/sys/class/input/||;s|/device/name||;s|^|/dev/input/|") | grep -c LIBINPUT_IGNORE_DEVICE=1' '^1$'
-check steam-ui       "sxx eval '$Q_ROUTE'" '^/routes/'
-check gamescope-mode "sxx eval 'String(!SteamUIStore.WindowStore.GamepadUIMainWindowInstance.BUseSeparateOverlayWindows())'" '^true$'
-check focus-daemon   'pgrep -x sxx-focus >/dev/null && runuser -u steam -- env DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority xprop -root GAMESCOPE_FOCUSABLE_APPS' '769'
+check steam-ui       "mdeck eval '$Q_ROUTE'" '^/routes/'
+check gamescope-mode "mdeck eval 'String(!SteamUIStore.WindowStore.GamepadUIMainWindowInstance.BUseSeparateOverlayWindows())'" '^true$'
+check focus-daemon   'pgrep -x mdeck-focus >/dev/null && runuser -u steam -- env DISPLAY=:0 XAUTHORITY=/home/steam/.Xauthority xprop -root GAMESCOPE_FOCUSABLE_APPS' '769'
 check memory-guards  'systemctl is-active earlyoom reach-guard | sort -u; cat /sys/kernel/mm/lru_gen/min_ttl_ms' '^1000$'
-tools/dev.sh sh 'systemctl start sxx-vpad; sleep 2' >/dev/null 2>&1   # dev-mode only service; releases leave it off
-before=$(tools/dev.sh sh "sxx eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
-tools/dev.sh sh 'sxx pad down wait:600' >/dev/null 2>&1
-after=$(tools/dev.sh sh "sxx eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
-tools/dev.sh sh 'sxx pad up wait:300' >/dev/null 2>&1
+tools/dev.sh sh 'systemctl start mdeck-vpad; sleep 2' >/dev/null 2>&1   # dev-mode only service; releases leave it off
+before=$(tools/dev.sh sh "mdeck eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
+tools/dev.sh sh 'mdeck pad down wait:600' >/dev/null 2>&1
+after=$(tools/dev.sh sh "mdeck eval -t 'Steam Big Picture Mode' '$Q_FOCUS'" 2>&1)
+tools/dev.sh sh 'mdeck pad up wait:300' >/dev/null 2>&1
 if [ -n "$after" ] && [ "$before" != "$after" ]; then echo "PASS pad-navigation: focus moved"
 else echo "FAIL pad-navigation: focus did not move ($before)"; fails=$((fails + 1)); fi
 check memory         'free -m | awk "/Mem:/ {print \"available \" \$7 \" MB\"}"' 'available'

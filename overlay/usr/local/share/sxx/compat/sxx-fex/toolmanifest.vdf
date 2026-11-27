@@ -1,6 +1,0 @@
-"manifest"
-{
-  "version" "2"
-  "commandline" "/sxx-fex-tool %verb% --"
-  "use_tool_subprocess_reaper" "0"
-}

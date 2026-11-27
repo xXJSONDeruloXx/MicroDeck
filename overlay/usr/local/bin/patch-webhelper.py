@@ -15,7 +15,7 @@ args = [a for a in sys.argv[1:] if not a.startswith("--")]
 path = args[0] if args else os.path.expanduser(
     "~/.local/share/Steam/steamrtarm64/steamwebhelper.sh")
 marker = b"--disable-hang-monitor"
-stock = os.path.expanduser("~/.cache/sxx/steamwebhelper.sh.stock")
+stock = os.path.expanduser("~/.cache/mdeck/steamwebhelper.sh.stock")
 orig = open(path, "rb").read()
 if "--restore" in sys.argv:
     if marker in orig and os.path.exists(stock):

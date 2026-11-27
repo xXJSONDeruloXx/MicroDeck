@@ -1,9 +1,0 @@
-[Unit]
-Description=SteamOSXX virtual test pad (driven by "sxx pad")
-
-[Service]
-ExecStart=/usr/local/bin/sxx vpad-daemon
-Restart=always
-
-[Install]
-WantedBy=multi-user.target

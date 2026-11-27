@@ -1,0 +1,232 @@
+#!/usr/bin/python3
+"""Keeps the ARMv8.0 Proton as every game's compatibility tool.
+
+Steam gives a game its own mapping (config.vdf CompatToolMapping, priority 250) with Valve's pick for it the
+moment it installs, and that mapping beats the global default (entry "0"). Valve's Proton uses LSE atomics, which the
+Cortex-A53 lacks, so a game left on it dies. This watches the mapping while Steam runs and moves every app that
+Steam just pointed at a Valve Proton to ours, once per app: a tool chosen by hand later is left alone.
+Started by mdeck-steam-defaults (needs the DevTools port, see /usr/local/bin/mdeck).
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+HOME = os.path.expanduser("~")
+STEAM = os.path.join(HOME, ".local/share/Steam")
+CONFIG = os.path.join(STEAM, "config/config.vdf")
+STATE = os.path.join(HOME, ".config/mdeck/compat-handled.json")
+
+
+def ours():
+    for line in open("/usr/local/share/mdeck/proton-armv8.conf"):
+        if line.startswith("PROTON_NAME="):
+            return line.split("=", 1)[1].strip()
+    return None
+
+
+def is_valve_proton(name):
+    """Valve's Proton registers as proton-experimental, proton-stable, proton_11 ...; user-installed builds (GE-,
+    DroidDeck-, ours) live in compatibilitytools.d and are never touched."""
+    return (bool(re.match(r"(?i)^proton([-_.]|$)", name)) and "armv8" not in name
+            and not os.path.isdir(os.path.join(STEAM, "compatibilitytools.d", name)))
+
+
+def read_mapping(text):
+    """{app: tool} from CompatToolMapping, however Steam indents it."""
+    start = text.find('"CompatToolMapping"')
+    if start < 0:
+        return {}
+    depth, i, out, app = 0, text.find("{", start), {}, None
+    begin = i
+    while i < len(text):
+        c = text[i]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    body = text[begin + 1:i]
+    for m in re.finditer(r'"(\d+)"\s*\{[^{}]*?"name"\s*"([^"]*)"', body):
+        out[m.group(1)] = m.group(2)
+    return out
+
+
+def mdeck(js):
+    return subprocess.run(["mdeck", "eval", js], capture_output=True, text=True, timeout=30)
+
+
+FEX_TOOL = "mdeck-fex"
+LEGACY_FEX_TOOL = "sx" + "x-fex"   # the tool's name before the MicroDeck rename
+# Steam's own tools and runtimes: never games
+NOT_GAMES = {"228980", "1070560", "1391110", "1628350", "3127680", "4183110", "4185400", "4427310", "4628740"}
+PREREQUISITES = {"3127680": "FEX", "4183110": "Steam Linux Runtime 4.0"}  # Valve's FEX tool and the x86 runtime mdeck-fex runs on
+ASK_EVERY = 120   # seconds between install requests for one tool
+ASK_LIMIT = 6     # requests per tool per run: Steam in offline mode or still starting ignores them
+
+
+def mdeck_ui(js):
+    """Evaluate in Steam's Big Picture window (where install dialogs appear)."""
+    return subprocess.run(["mdeck", "eval", "-t", "Steam Big Picture Mode", js], capture_output=True, text=True, timeout=30)
+
+
+def press_install(name):
+    """Press Install on Steam's install dialog for `name`: first a SteamOS compatibility note, then the install dialog itself."""
+    js = ("(function(n){var t=document.body.innerText;if(t.indexOf(n)<0||t.indexOf('Cancel')<0)return '';"
+          "var b=[...document.querySelectorAll('[role=button],button,div')].filter(function(e){return e.children.length==0&&e.innerText==='Install'});"
+          "if(!b.length)return '';b[b.length-1].click();return 'clicked'})(%s)" % json.dumps(name))
+    clicked = 0
+    for _ in range(14):
+        time.sleep(2.5)
+        try:
+            r = mdeck_ui(js)
+        except Exception:
+            continue
+        if "clicked" in r.stdout:
+            clicked += 1
+            if clicked == 2:
+                return True
+    return clicked > 0
+
+
+def elf_machine(path):
+    try:
+        with open(path, "rb") as f:
+            head = f.read(20)
+    except OSError:
+        return None
+    return int.from_bytes(head[18:20], "little") if head[:4] == b"\x7fELF" else None
+
+
+def is_linux_x86_only(folder):
+    """An installed game whose top two folder levels hold x86 Linux programs and no Windows ones: Steam installed its Linux
+    build, which this ARM board runs through FEX (mdeck-fex)."""
+    found = False
+    for root, dirs, files in os.walk(folder):
+        if root[len(folder):].count(os.sep) >= 2:
+            dirs[:] = []
+            continue
+        for name in files:
+            if name.lower().endswith((".exe", ".dll")):
+                return False
+            if not found and elf_machine(os.path.join(root, name)) in (3, 62):
+                found = True
+    return found
+
+
+def installed_apps():
+    apps = os.path.join(STEAM, "steamapps")
+    try:
+        names = os.listdir(apps)
+    except OSError:
+        return
+    for name in names:
+        m = re.match(r"appmanifest_(\d+)\.acf$", name)
+        if not m or m.group(1) in NOT_GAMES:
+            continue
+        text = open(os.path.join(apps, name), encoding="utf-8", errors="replace").read()
+        flags = re.search(r'"StateFlags"\s*"(\d+)"', text)
+        folder = re.search(r'"installdir"\s*"([^"]*)"', text)
+        if flags and int(flags.group(1)) & 4 and folder:
+            yield m.group(1), os.path.join(apps, "common", folder.group(1))
+
+
+def tool_installed(appid):
+    path = os.path.join(STEAM, "steamapps", "appmanifest_%s.acf" % appid)
+    try:
+        flags = re.search(r'"StateFlags"\s*"(\d+)"', open(path).read())
+    except OSError:
+        return False
+    return bool(flags and int(flags.group(1)) & 4)
+
+
+def seed():
+    """Before Steam starts (it rewrites config.vdf while running): map every installed Linux-only x86 game that has no mapping
+    to mdeck-fex. The running daemon asks Steam through DevTools too, but Steam is slow and sometimes ignores that."""
+    text = open(CONFIG, encoding="utf-8", errors="replace").read()
+    # games mapped to the tool under its name from before the rename (the Steam config of an older install) follow it to the new one
+    renamed = '"%s"' % LEGACY_FEX_TOOL in text
+    if renamed:
+        text = text.replace('"%s"' % LEGACY_FEX_TOOL, '"%s"' % FEX_TOOL)
+    mapping = read_mapping(text)
+    add = [app for app, folder in installed_apps() if app not in mapping and is_linux_x86_only(folder)]
+    start = text.find('"CompatToolMapping"')
+    if (not add and not renamed) or start < 0:
+        return
+    brace = text.find("{", start)
+    entry = '\n\t\t\t\t\t"%s"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"%s"\n\t\t\t\t\t\t"config"\t\t""\n\t\t\t\t\t\t"priority"\t\t"250"\n\t\t\t\t\t}'
+    text = text[:brace + 1] + "".join(entry % (app, FEX_TOOL) for app in add) + text[brace + 1:]
+    tmp = CONFIG + ".mdeck"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, CONFIG)
+    print("mdeck-compat-default: mapped %s to %s before Steam started%s" % (", ".join(add) or "nothing new", FEX_TOOL,
+                                                                          " (moved the old tool name over)" if renamed else ""), flush=True)
+
+
+def main():
+    if "--seed" in sys.argv:
+        seed()
+        return
+    mine = ours()
+    if not mine:
+        return
+    try:
+        handled = set(json.load(open(STATE)))
+    except (OSError, ValueError):
+        handled = set()
+    asked = {}
+    asked_pre = {}   # tool -> (time of the last request, requests so far)
+    while True:
+        try:
+            mapping = read_mapping(open(CONFIG, encoding="utf-8", errors="replace").read())
+            todo = [a for a, t in mapping.items() if a not in handled and is_valve_proton(t)]
+            for app in todo:
+                call = "SteamClient.Settings.SpecifyGlobalCompatTool('%s')" % mine if app == "0" else \
+                    "SteamClient.Apps.SpecifyCompatTool(%s,'%s')" % (app, mine)
+                if mdeck(call).returncode == 0:
+                    handled.add(app)
+                    print("mdeck-compat-default: app %s moved from %s to %s" % (app, mapping[app], mine), flush=True)
+            # Linux-only x86 games: no mapping means Steam runs the Linux build natively, which cannot execute here
+            games = list(installed_apps())
+            # mdeck-fex needs Valve's FEX tool and the x86 runtime: ask for them while a Linux x86 game is installed, whatever its mapping
+            if any(is_linux_x86_only(folder) for app, folder in games):
+                for pre, name in PREREQUISITES.items():
+                    if tool_installed(pre) or time.time() - asked_pre.get(pre, (0, 0))[0] < ASK_EVERY                             or asked_pre.get(pre, (0, 0))[1] >= ASK_LIMIT:
+                        continue
+                    asked_pre[pre] = (time.time(), asked_pre.get(pre, (0, 0))[1] + 1)
+                    mdeck("SteamClient.URL.ExecuteSteamURL('steam://install/%s')" % pre)
+                    print("mdeck-compat-default: asked Steam to install tool %s (%s) for Linux x86 games" % (pre, name), flush=True)
+                    if press_install(name):
+                        print("mdeck-compat-default: pressed Install for %s" % name, flush=True)
+            for app, folder in games:
+                key = "fex:" + app
+                if key in handled:
+                    continue
+                if mapping.get(app) == FEX_TOOL:  # it took: from here on a tool chosen by hand is left alone
+                    handled.add(key)
+                    todo.append(app)
+                    continue
+                if app in mapping or not is_linux_x86_only(folder):
+                    continue
+                # Steam ignores a tool it has not finished registering (about 40 s after it starts) and applies a mapping a
+                # minute or so after it is asked: asked again every 90 s until it shows up in config.vdf
+                if time.time() - asked.get(app, 0) < 90:
+                    continue
+                asked[app] = time.time()
+                if mdeck("SteamClient.Apps.SpecifyCompatTool(%s,'%s')" % (app, FEX_TOOL)).returncode == 0:
+                    print("mdeck-compat-default: app %s is a Linux x86 game, asked for %s" % (app, FEX_TOOL), flush=True)
+            if todo:
+                os.makedirs(os.path.dirname(STATE), exist_ok=True)
+                json.dump(sorted(handled), open(STATE, "w"))
+        except Exception as e:  # Steam restarting: DevTools down or the file mid-write
+            print("mdeck-compat-default:", e, flush=True)
+        time.sleep(10)
+
+
+if __name__ == "__main__":
+    main()

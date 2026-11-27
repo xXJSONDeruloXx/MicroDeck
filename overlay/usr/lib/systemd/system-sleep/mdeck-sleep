@@ -1,0 +1,33 @@
+#!/bin/sh
+# systemd-sleep hook (s2idle).
+#  - Steam's virtual Deck controller is a USB/IP device on vhci_hcd, and that host controller refuses to suspend while a device is
+#    attached: stop InputPlumber (which owns it) before sleeping and start it again on resume.
+#  - The SDIO Wi-Fi chip is unbound before sleeping and bound again after, instead of trusting the driver's own suspend and resume;
+#    NetworkManager reconnects when wlan0 returns.
+#   mdeck-sleep pre|post suspend
+STATE=/run/mdeck-sleep-sdio
+case "$1" in
+  pre)
+    logger -t mdeck-sleep "going to sleep"
+    rm -f /run/mdeck-sleep-woke "$STATE"
+    systemctl stop inputplumber
+    for dev in /sys/bus/sdio/devices/*; do
+      [ -e "$dev/driver" ] || continue
+      drv=$(basename "$(readlink "$dev/driver")")
+      echo "$(basename "$dev") $drv" >> "$STATE"
+      echo "$(basename "$dev")" > "$dev/driver/unbind"
+    done
+    sync
+    ;;
+  post)
+    logger -t mdeck-sleep "woke up"
+    # The press that woke the handheld arrives as a power-key event right after resume; without this it would put it to sleep again.
+    systemd-run --no-block --quiet --unit=mdeck-sleep-holdoff \
+      systemd-inhibit --what=handle-power-key --who=mdeck-sleep --why="just woke up" --mode=block sleep 3
+    # in the background, so the resume is not held up
+    [ -f "$STATE" ] && systemd-run --no-block --quiet --unit=mdeck-sleep-wifi /usr/local/sbin/mdeck-sleep-wifi
+    systemctl start inputplumber
+    touch /run/mdeck-sleep-woke
+    ;;
+esac
+exit 0

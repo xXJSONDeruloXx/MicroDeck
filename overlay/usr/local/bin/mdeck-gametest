@@ -1,0 +1,65 @@
+#!/bin/sh
+# End-to-end game check, as the steam user: launch from Steam, wait until Steam hands the game the base layer
+# and it is focused, open the Steam menu in game, return, quit. Prints timings; screenshots go to
+# /tmp/mdeck-gametest-<appid>-<step>.xwd.
+#   mdeck-gametest <appid> [launch-timeout-s]
+app=${1:?appid}; limit=${2:-300}
+export DISPLAY=${DISPLAY:-:0} XAUTHORITY=${XAUTHORITY:-/home/steam/.Xauthority}
+t0=$(date +%s)
+el() { echo "$(( $(date +%s) - t0 ))s"; }
+shot() { xwd -root -silent > "/tmp/mdeck-gametest-$app-$1.xwd" 2>/dev/null; }
+base() { xprop -root GAMESCOPECTRL_BASELAYER_APPID | sed 's/.*= //'; }
+steam_win() { xprop -root GAMESCOPE_FOCUSABLE_WINDOWS | sed 's/.*= //' | tr -d ' ' | tr , '\n' | paste - - - | awk -F'\t' '$2 == 769 {print $1; exit}'; }
+fail() { echo "FAIL $*"; shot fail; exit 1; }
+# RunGame on a game that is already running opens Steam's in-game menu instead: quit it first.
+if pgrep -u "$(id -u)" -f "reaper SteamLaunch AppId=$app " >/dev/null; then
+  mdeck eval "SteamClient.Apps.TerminateApp(\"$app\", false)" >/dev/null
+  for i in $(seq 1 60); do pgrep -u "$(id -u)" -f "reaper SteamLaunch AppId=$app " >/dev/null || break; sleep 2; done
+  sleep 5
+fi
+t0=$(date +%s)
+mdeck eval "SteamClient.Apps.RunGame(\"$app\",\"\",-1,100)" >/dev/null || fail "RunGame"
+echo "launched"
+# Proton windows carry WM_CLASS steam_app_<id>; native (FEX) games often set none, so mdeck-focus's own answer counts too.
+focused_game() {
+  a=$(xprop -root _NET_ACTIVE_WINDOW | sed 's/.*# //')
+  xprop -id "$a" WM_CLASS 2>/dev/null | grep -q "steam_app_$app" && return 0
+  [ "$(xprop -root GAMESCOPE_FOCUSED_APP 2>/dev/null | sed 's/.*= //')" = "$app" ]
+}
+# Steam's dialogs in front of a launch wait for a button. Two are known: "playing on another computer" (Continue would end
+# the account's other session, so cancel and fail instead) and "External Controller Translation" (OK is harmless).
+dialog() { mdeck eval -t "Steam Big Picture Mode" 'document.body.innerText' 2>/dev/null | tr '\n' ' '; }
+n=0
+until base | grep -qE "^(413091, )?$app," && focused_game; do
+  [ $(( $(date +%s) - t0 )) -gt "$limit" ] && fail "game never came to the front (base $(base))"
+  n=$((n + 1))
+  if [ $((n % 3)) = 0 ]; then
+    case "$(dialog)" in
+      *"already playing"*|*"another computer"*) mdeck pad b; fail "Steam says the account is playing on another computer; launch cancelled (not continued, that would end the other session)" ;;
+      *"External Controller Translation"*) mdeck pad a; echo "dismissed the controller translation hint" ;;
+      *"On-Screen Keyboard"*|*"Magnifier Tool"*) mdeck pad a; echo "dismissed a Steam launch hint" ;;
+    esac
+  fi
+  sleep 2
+done
+echo "PASS game in front (base layer + focus) after $(el)"
+sleep 3; shot game
+sw=$(steam_win)
+mdeck pad hold:guide:300
+until [ "$(xprop -id "$sw" STEAM_OVERLAY 2>/dev/null | sed 's/.*= //')" = 1 ]; do
+  [ $(( $(date +%s) - t0 )) -gt $((limit + 120)) ] && fail "Steam menu never opened"
+  sleep 1
+done
+echo "PASS Steam menu over the game after $(el)"; sleep 3; shot menu
+mdeck pad hold:b:300
+until [ "$(xprop -id "$sw" STEAM_OVERLAY 2>/dev/null | sed 's/.*= //')" = 0 ]; do
+  [ $(( $(date +%s) - t0 )) -gt $((limit + 240)) ] && fail "Steam menu never closed"
+  sleep 1
+done
+echo "PASS back in game after $(el)"
+mdeck eval "SteamClient.Apps.TerminateApp(\"$app\", false)" >/dev/null
+until base | grep -qE "^(413091, )?769$"; do
+  [ $(( $(date +%s) - t0 )) -gt $((limit + 360)) ] && fail "Steam did not take the screen back ($(base))"
+  sleep 2
+done
+echo "PASS quit, Big Picture back after $(el)"

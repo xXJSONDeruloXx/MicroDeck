@@ -1,0 +1,11 @@
+[Unit]
+Description=Recompress idle zram pages with zstd
+After=systemd-zram-setup@zram0.service
+
+[Service]
+ExecStart=/usr/local/sbin/mdeck-zram-recompress
+Nice=10
+CPUWeight=20
+
+[Install]
+WantedBy=multi-user.target

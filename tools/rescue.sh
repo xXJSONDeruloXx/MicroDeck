@@ -16,10 +16,10 @@ SSHO=(-i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o L
 state() {
   for s in $(adb devices | awk '$2 == "device" && $1 !~ /tls/ {print $1}'); do
     h=$(adb -s "$s" shell cat /etc/hostname 2>/dev/null | tr -d '\r')
-    [ "$h" = rg40xx ] && { echo "os-adb $s"; return; }
+    [[ "$h" =~ ^(microdeck-|rg40xx$) ]] && { echo "os-adb $s"; return; }
     [ "$s" = "$MUOS" ] && { echo "muos $s"; return; }
   done
-  ssh "${SSHO[@]}" root@rg40xx.local true 2>/dev/null && { echo "os-ssh rg40xx.local"; return; }
+  ssh "${SSHO[@]}" root@microdeck-rg40xx.local true 2>/dev/null && { echo "os-ssh microdeck-rg40xx.local"; return; }
   "$FEL" ver 2>/dev/null | grep -q AWUSBFEX && { echo fel; return; }
   echo none
 }

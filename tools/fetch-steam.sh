@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 channel=${1:-steamdeck_publicbeta}
-MSYS_NO_PATHCONV=1 docker run --rm --platform linux/arm64 -v "$(pwd -W 2>/dev/null || pwd)/cache:/out" steamos-rg40xx-rootfs \
+MSYS_NO_PATHCONV=1 docker run --rm --platform linux/arm64 -v "$(pwd -W 2>/dev/null || pwd)/cache:/out" microdeck-rg40xx-rootfs \
   bash -c "set -e; export HOME=/tmp/h; mkdir -p \$HOME
     bash /usr/local/bin/steam-install.sh $channel
     rm -rf \$HOME/.local/share/Steam/package/dl

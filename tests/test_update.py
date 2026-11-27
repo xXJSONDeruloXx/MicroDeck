@@ -5,7 +5,7 @@ import unittest
 
 import helpers
 
-SCRIPT = helpers.script("usr", "local", "sbin", "sxx-update")
+SCRIPT = helpers.script("usr", "local", "sbin", "mdeck-update")
 
 
 def run(current, snippet, state_files=None):
@@ -16,7 +16,7 @@ def run(current, snippet, state_files=None):
         for name, text in (state_files or {}).items():
             with open(os.path.join(d, name), "w") as f:
                 f.write(text)
-        env = dict(os.environ, SXX_UPDATE_SOURCED="1", SXX_RELEASE_FILE=release, SXX_UPDATE_STATE=d)
+        env = dict(os.environ, MDECK_UPDATE_SOURCED="1", MDECK_RELEASE_FILE=release, MDECK_UPDATE_STATE=d)
         return subprocess.run(["bash", "-c", '. "%s"; %s' % (SCRIPT.replace("\\", "/"), snippet)], env=env,
                               capture_output=True, text=True)
 
@@ -45,7 +45,7 @@ class UpdateTest(unittest.TestCase):
             open(os.path.join(d, "trial"), "w").write("1")
             release = os.path.join(d, "release")
             open(release, "w").write("v0.5.0\n")
-            env = dict(os.environ, SXX_UPDATE_SOURCED="1", SXX_RELEASE_FILE=release, SXX_UPDATE_STATE=d)
+            env = dict(os.environ, MDECK_UPDATE_SOURCED="1", MDECK_RELEASE_FILE=release, MDECK_UPDATE_STATE=d)
             subprocess.run(["bash", "-c", '. "%s"; reconcile' % SCRIPT.replace("\\", "/")], env=env, check=True)
             self.assertFalse(os.path.exists(os.path.join(d, "installed")))
             self.assertFalse(os.path.exists(os.path.join(d, "trial")))
@@ -62,25 +62,25 @@ class DeviceAssetTest(unittest.TestCase):
             with open(api, "w") as f:
                 json.dump({"tag_name": "v0.7.0", "body": "", "assets": [
                     {"name": n, "browser_download_url": "https://example.invalid/" + n}
-                    for n in ("steamos-rg40xx.img.xz", "steamos-rg40xx.img.xz.sha256",
-                              "steamos-rg28xx.img.xz", "steamos-rg28xx.img.xz.sha256")]}, f)
-            env = dict(os.environ, SXX_UPDATE_SOURCED="1", SXX_UPDATE_STATE=d, SXX_UPDATE_API=pathlib.Path(api).as_uri())
+                    for n in ("microdeck-rg40xx.img.xz", "microdeck-rg40xx.img.xz.sha256",
+                              "microdeck-rg28xx.img.xz", "microdeck-rg28xx.img.xz.sha256")]}, f)
+            env = dict(os.environ, MDECK_UPDATE_SOURCED="1", MDECK_UPDATE_STATE=d, MDECK_UPDATE_API=pathlib.Path(api).as_uri())
             if device:
                 with open(os.path.join(d, "device"), "w") as f:
                     f.write(device + "\n")
-                env["SXX_DEVICE_FILE"] = os.path.join(d, "device")
+                env["MDECK_DEVICE_FILE"] = os.path.join(d, "device")
             else:
-                env["SXX_DEVICE_FILE"] = os.path.join(d, "missing")
+                env["MDECK_DEVICE_FILE"] = os.path.join(d, "missing")
             r = subprocess.run(["bash", "-c", '. "%s"; latest' % SCRIPT.replace("\\", "/")], env=env, capture_output=True, text=True)
             return r.stdout.split()
 
     def test_each_device_gets_its_own_image(self):
-        self.assertEqual(self.latest("rg28xx")[:3], ["v0.7.0", "https://example.invalid/steamos-rg28xx.img.xz",
-                                                    "https://example.invalid/steamos-rg28xx.img.xz.sha256"])
-        self.assertIn("steamos-rg40xx.img.xz", self.latest("rg40xx")[1])
+        self.assertEqual(self.latest("rg28xx")[:3], ["v0.7.0", "https://example.invalid/microdeck-rg28xx.img.xz",
+                                                    "https://example.invalid/microdeck-rg28xx.img.xz.sha256"])
+        self.assertIn("microdeck-rg40xx.img.xz", self.latest("rg40xx")[1])
 
     def test_images_without_a_device_file_are_the_rg40xx(self):
-        self.assertIn("steamos-rg40xx.img.xz", self.latest(None)[1])
+        self.assertIn("microdeck-rg40xx.img.xz", self.latest(None)[1])
 
 
 class SteamosHookTest(unittest.TestCase):
@@ -91,7 +91,7 @@ class SteamosHookTest(unittest.TestCase):
             release = os.path.join(d, "release")
             with open(release, "w") as f:
                 f.write("v0.4.0\n")
-            env = dict(os.environ, SXX_RELEASE_FILE=release, SXX_UPDATE_STATE=d, SXX_UPDATE_API="http://127.0.0.1:9/none")
+            env = dict(os.environ, MDECK_RELEASE_FILE=release, MDECK_UPDATE_STATE=d, MDECK_UPDATE_API="http://127.0.0.1:9/none")
             return subprocess.run(["bash", SCRIPT, "steamos", *args], env=env, capture_output=True, text=True, timeout=60)
 
     def test_duplicate_detection_probe(self):

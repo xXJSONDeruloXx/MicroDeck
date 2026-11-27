@@ -2,4 +2,4 @@
 # its buttons into pointer clicks at the cursor (screen centre). Steam reads the pad through evdev; keep
 # it away from libinput and drop the tablet tags.
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="H700 Gamepad", ENV{ID_INPUT_TABLET}="", ENV{ID_INPUT_TABLET_PAD}="", ENV{LIBINPUT_IGNORE_DEVICE}="1"
-SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="SteamOSXX Test Pad", ENV{ID_INPUT_TABLET}="", ENV{ID_INPUT_TABLET_PAD}="", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="MicroDeck Test Pad", ENV{ID_INPUT_TABLET}="", ENV{ID_INPUT_TABLET_PAD}="", ENV{LIBINPUT_IGNORE_DEVICE}="1"

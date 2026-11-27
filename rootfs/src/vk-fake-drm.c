@@ -88,7 +88,7 @@ int vkCreateDevice(void *phys, const DeviceCreateInfo *ci, const void *alloc, vo
     int found = 0;
     for (uint32_t j = 0; j < have_n && !found; j++) found = !strcmp(have[j].extensionName, want);
     if (found) names[n++] = want;
-    else if (getenv("SXX_VK_DEBUG")) fprintf(stderr, "vk-fake-drm: dropping %s\n", want);
+    else if (getenv("MDECK_VK_DEBUG")) fprintf(stderr, "vk-fake-drm: dropping %s\n", want);
   }
   free(have);
   copy.enabledExtensionCount = n;

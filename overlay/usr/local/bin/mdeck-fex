@@ -1,0 +1,265 @@
+#!/usr/bin/python3
+"""Runs Linux x86 and x86-64 programs on this arm64 board with Valve's FEX (the Steam tool "FEX", app 3127680).
+
+  mdeck-fex run -- <program> [args...]   run it under FEX (what the mdeck-fex Steam compatibility tool calls)
+  mdeck-fex prepare                      build the guest root and config only
+  mdeck-fex status                       what it would use
+
+The guest root is Steam's own x86 runtime (Steam Linux Runtime 4.0, else sniper or soldier), reassembled from its
+content-addressed files the way DroidDeck's droiddeck-fex does it. FEX forwards OpenGL, DRM and ALSA to the host libraries
+through Valve's thunks, so the Mali is used. Everything else is emulated.
+"""
+import gzip
+import json
+import os
+import re
+import sys
+
+HOME = os.environ.get("HOME") or "/home/steam"
+STEAM = os.path.join(HOME, ".local", "share", "Steam")
+COMMON = os.path.join(STEAM, "steamapps", "common")
+FEX_DIR = os.path.join(COMMON, "FEX-Emu")
+STATE = os.path.join(HOME, ".local", "share", "mdeck-fex")
+# (folder, platform name prefix) in order of preference: FEX's guest thunks need a recent libstdc++, which Steam Linux
+# Runtime 4.0 has; the client's own runtime (no download) is the fallback
+RUNTIMES = ((os.path.join(COMMON, "SteamLinuxRuntime_4"), "steamrt4_platform_"),
+            (os.path.join(COMMON, "SteamLinuxRuntime_sniper"), "sniper_platform_"),
+            (os.path.join(COMMON, "SteamLinuxRuntime_soldier"), "soldier_platform_"),
+            (os.path.join(STEAM, "steamrt64", "pv-runtime", "steam-runtime-steamrt"), "steamrt3c_platform_"))
+LAYOUT = 1
+THUNKS = {"GL": 1, "drm": 1, "asound": 1}
+ESCAPE = re.compile(rb"\\([0-7]{3})")
+
+
+def say(message):
+    print("mdeck-fex: %s" % message, file=sys.stderr, flush=True)
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def write_if_changed(path, data):
+    if read_text(path) == data:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w") as f:
+        f.write(data)
+    os.replace(tmp, path)
+
+
+def platform_dir():
+    """The first installed x86 Steam Linux Runtime platform (a folder with files/ and usr-mtree.txt.gz)."""
+    for base, prefix in RUNTIMES:
+        try:
+            entries = os.listdir(base)
+        except OSError:
+            continue
+        found = sorted(e for e in entries if e.startswith(prefix) and
+                       os.path.isfile(os.path.join(base, e, "usr-mtree.txt.gz")))
+        if found:
+            return os.path.join(base, found[-1])
+    return None
+
+
+def unescape(raw):
+    return ESCAPE.sub(lambda match: bytes([int(match.group(1), 8)]), raw)
+
+
+def in_root(root, link, target):
+    if not target.startswith(b"/"):
+        return target
+    relative = target.lstrip(b"/")
+    if relative == b"usr" or relative.startswith(b"usr/"):
+        relative = relative[4:]
+    return os.path.relpath(os.path.join(root, relative), os.path.dirname(link))
+
+
+def materialize(platform):
+    """Valve ships the runtime as hash-named blobs plus a manifest; this lays the blobs out as the files they stand for
+    (symlinks, so it costs no space). From DroidDeck's droiddeck-fex."""
+    mtree = os.path.join(platform, "usr-mtree.txt.gz")
+    info = os.stat(mtree)
+    stamp = "%d %d %d\n" % (LAYOUT, info.st_size, info.st_mtime_ns)
+    root = os.fsencode(os.path.join(platform, "files"))
+    marker = os.path.join(os.fsdecode(root), ".mdeck-fex")
+    if read_text(marker) == stamp:
+        return
+    links = []
+    with gzip.open(mtree, "rb") as source:
+        for line in source:
+            parts = line.split()
+            if not parts or parts[0].startswith(b"#"):
+                continue
+            fields = dict(part.split(b"=", 1) for part in parts[1:] if b"=" in part)
+            relative = os.path.normpath(unescape(parts[0]))
+            if os.path.isabs(relative) or relative == b".." or relative.startswith(b"../"):
+                continue
+            dest = os.path.join(root, relative)
+            kind = fields.get(b"type")
+            if kind == b"dir":
+                os.makedirs(dest, exist_ok=True)
+            elif kind == b"file" and b"contents" in fields:
+                blob = os.path.join(root, os.path.normpath(unescape(fields[b"contents"])))
+                links.append((dest, os.path.relpath(blob, os.path.dirname(dest))))
+            elif kind == b"link" and b"link" in fields:
+                links.append((dest, in_root(root, dest, unescape(fields[b"link"]))))
+    for dest, target in links:
+        if os.path.islink(dest):
+            if os.readlink(dest) == target:
+                continue
+            os.unlink(dest)
+        elif os.path.lexists(dest):
+            continue
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        os.symlink(target, dest)
+    usr = os.path.join(root, b"usr")
+    if not os.path.lexists(usr):
+        os.symlink(b".", usr)
+    write_if_changed(marker, stamp)
+
+
+SCOUT = os.path.join(COMMON, "SteamLinuxRuntime", "steam-runtime")
+SO_NAME = re.compile(r".*\.so(\.[0-9]+)*$")
+LEGACY = (("i386", "lib/i386-linux-gnu", (("i386", "usr/lib/i386-linux-gnu"), ("i386", "lib/i386-linux-gnu"))),
+          ("x86_64", "lib/x86_64-linux-gnu", (("amd64", "usr/lib/x86_64-linux-gnu"), ("amd64", "lib/x86_64-linux-gnu"))))
+
+
+def legacy_libraries(rootfs):
+    """Games built for the old Steam Runtime ("scout") ask for libraries newer runtimes dropped (libvorbisfile.so.3, libCg
+    dependencies, ...). Steam installs scout as Steam Linux Runtime 1.0; this links just the libraries the guest root does not
+    already have into one folder per architecture, so they fill gaps and never replace a newer one."""
+    paths = []
+    for arch, rootlib, sources in LEGACY:
+        out = os.path.join(STATE, "legacy", arch)
+        stamp = "%d %s %s\n" % (LAYOUT, rootfs, SCOUT)
+        if read_text(os.path.join(out, ".stamp")) != stamp:
+            os.makedirs(out, exist_ok=True)
+            for entry in os.listdir(out):
+                os.unlink(os.path.join(out, entry))
+            for sub, directory in sources:
+                folder = os.path.join(SCOUT, sub, directory)
+                try:
+                    names = sorted(os.listdir(folder))
+                except OSError:
+                    continue
+                for name in names:
+                    wanted = SO_NAME.match(name) and not os.path.lexists(os.path.join(out, name))
+                    if wanted and not os.path.exists(os.path.join(rootfs, rootlib, name)):
+                        os.symlink(os.path.join(folder, name), os.path.join(out, name))
+            write_if_changed(os.path.join(out, ".stamp"), stamp)
+        paths.append(out)
+    return paths
+
+
+def elf_arch(path):
+    try:
+        with open(path, "rb") as f:
+            head = f.read(20)
+    except OSError:
+        return None
+    if head[:4] != b"\x7fELF":
+        return None
+    return {3: "i386", 62: "x86_64", 40: "arm", 183: "arm64"}.get(int.from_bytes(head[18:20], "little"))
+
+
+def link_steam_sdk():
+    """x86 games find the Steam client through ~/.steam/sdk32 and sdk64; the arm64 client ships its own x86 steamclient.so."""
+    for sdk, directory, want in (("sdk32", "linux32", "i386"), ("sdk64", "linux64", "x86_64")):
+        target = os.path.join(STEAM, directory)
+        link = os.path.join(HOME, ".steam", sdk)
+        if elf_arch(os.path.join(target, "steamclient.so")) != want or os.path.realpath(link) == os.path.realpath(target):
+            continue
+        os.makedirs(os.path.dirname(link), exist_ok=True)
+        tmp = "%s.%d.tmp" % (link, os.getpid())
+        os.symlink(target, tmp)
+        os.replace(tmp, link)
+
+
+def prepare():
+    fex = os.path.join(FEX_DIR, "usr", "bin", "FEX")
+    if not os.access(fex, os.X_OK):
+        say("Valve's FEX tool is not installed (Steam app 3127680): install it from Steam first")
+        return None
+    platform = platform_dir()
+    if not platform:
+        say("no x86 Steam Linux Runtime installed (Steam Linux Runtime 4.0, app 4183110): install it from Steam first")
+        return None
+    materialize(platform)
+    write_if_changed(os.path.join(STATE, "ThunksConfig.json"), json.dumps({"ThunksDB": THUNKS}, indent=2) + "\n")
+    link_steam_sdk()
+    return {"fex": fex, "rootfs": os.path.join(platform, "files"), "platform": platform,
+            "host_thunks": os.path.join(FEX_DIR, "usr", "lib", "aarch64-linux-gnu", "fex-emu", "HostThunks"),
+            "guest_thunks": os.path.join(FEX_DIR, "usr", "share", "fex-emu", "GuestThunks")}
+
+
+def guest_environment(fex, env):
+    env = dict(env)
+    env["FEX_PORTABLE"] = "1"
+    env["FEX_ROOTFS"] = fex["rootfs"]
+    env["FEX_THUNKHOSTLIBS"] = fex["host_thunks"]
+    env["FEX_THUNKGUESTLIBS"] = fex["guest_thunks"]
+    env["FEX_THUNKCONFIG"] = os.path.join(STATE, "ThunksConfig.json")
+    env.setdefault("FEX_SILENTLOG", "1")
+    env.setdefault("FEX_OUTPUTLOG", "stderr")
+    # the arm64 client's runtime and overlay are not for an x86 guest
+    env.pop("GLIBC_TUNABLES", None)
+    for name in ("LD_PRELOAD", "LD_LIBRARY_PATH"):
+        kept = [p for p in (env.get(name) or "").split(":") if p and "arm64" not in p and "aarch64" not in p
+                and "gameoverlayrenderer" not in p and "lse" not in p]
+        if kept:
+            env[name] = ":".join(kept)
+        else:
+            env.pop(name, None)
+    legacy = legacy_libraries(fex["rootfs"])
+    env["LD_LIBRARY_PATH"] = ":".join([p for p in (env.get("LD_LIBRARY_PATH") or "").split(":") if p] + legacy)
+    if "aarch64" in env.get("GCONV_PATH", "") or "arm64" in env.get("GCONV_PATH", ""):
+        env.pop("GCONV_PATH")
+    return env
+
+
+# Games whose Steam launch entry is a Qt launcher window that needs a pointer: start the game binary the launcher would exec.
+SKIP_LAUNCHER = {"219150": {"hotline_launcher": "Hotline"}}
+
+
+def run(command):
+    fex = prepare()
+    if fex is None:
+        return 126
+    program = command[0]
+    skip = SKIP_LAUNCHER.get(os.environ.get("SteamAppId", ""), {}).get(os.path.basename(program))
+    if skip:
+        program = os.path.join(os.path.dirname(program), skip)
+    say("running %s under FEX (root %s)" % (program, os.path.basename(fex["platform"])))
+    os.execve(fex["fex"], [fex["fex"], program] + command[1:], guest_environment(fex, os.environ))
+
+
+def main(argv):
+    if argv[:1] == ["run"]:
+        command = argv[1:]
+        if command[:1] == ["--"]:
+            command = command[1:]
+        if not command:
+            say("nothing to run")
+            return 2
+        return run(command)
+    if argv[:1] == ["prepare"]:
+        fex = prepare()
+        print(json.dumps(fex, indent=1) if fex else "not ready")
+        return 0 if fex else 1
+    if argv[:1] == ["status"]:
+        fex = os.path.join(FEX_DIR, "usr/bin/FEX")
+        print("FEX:", fex, "present" if os.path.exists(fex) else "missing")
+        print("runtime:", platform_dir())
+        return 0
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

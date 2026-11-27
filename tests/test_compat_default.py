@@ -17,7 +17,7 @@ MAPPING = (
 
 class CompatDefaultTest(unittest.TestCase):
     def setUp(self):
-        self.mod = helpers.load("compat_default", "usr", "local", "bin", "sxx-compat-default")
+        self.mod = helpers.load("compat_default", "usr", "local", "bin", "mdeck-compat-default")
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.steam = os.path.join(self.tmp.name, "Steam")
@@ -38,6 +38,16 @@ class CompatDefaultTest(unittest.TestCase):
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "wb") as f:
                 f.write(data)
+
+    def test_seed_moves_the_tool_name_from_before_the_rename_over(self):
+        legacy = "sx" + "x-fex"
+        entry = '\t\t\t\t\t"777"\n\t\t\t\t\t{\n\t\t\t\t\t\t"name"\t\t"%s"\n\t\t\t\t\t\t"config"\t\t""\n\t\t\t\t\t\t"priority"\t\t"250"\n\t\t\t\t\t}\n' % legacy
+        with open(self.mod.CONFIG, "w") as f:
+            f.write(MAPPING.replace('\t\t\t\t\t"8400"\n', entry + '\t\t\t\t\t"8400"\n', 1))
+        self.mod.seed()
+        text = open(self.mod.CONFIG).read()
+        self.assertNotIn('"%s"' % legacy, text)
+        self.assertEqual(self.mod.read_mapping(text)["777"], "mdeck-fex")
 
     def test_read_mapping(self):
         self.assertEqual(self.mod.read_mapping(MAPPING), {"8400": "proton-armv8-proton-11.0-3", "0": "proton-armv8-proton-11.0-3"})
@@ -60,7 +70,7 @@ class CompatDefaultTest(unittest.TestCase):
         self.install("500", "winonly", {"a.exe": b"MZ"})
         self.mod.seed()
         mapping = self.mod.read_mapping(open(self.mod.CONFIG).read())
-        self.assertEqual(mapping["219150"], "sxx-fex")
+        self.assertEqual(mapping["219150"], "mdeck-fex")
         self.assertEqual(mapping["8400"], "proton-armv8-proton-11.0-3")
         self.assertNotIn("500", mapping)
         first = open(self.mod.CONFIG).read()
@@ -70,7 +80,7 @@ class CompatDefaultTest(unittest.TestCase):
     def test_seed_does_not_override_a_manual_choice(self):
         self.install("219150", "hotline", {"Hotline": helpers.ELF_I386})
         self.mod.seed()
-        text = open(self.mod.CONFIG).read().replace('"sxx-fex"', '"proton-experimental"')
+        text = open(self.mod.CONFIG).read().replace('"mdeck-fex"', '"proton-experimental"')
         open(self.mod.CONFIG, "w").write(text)
         self.mod.seed()
         self.assertEqual(self.mod.read_mapping(open(self.mod.CONFIG).read())["219150"], "proton-experimental")
@@ -80,7 +90,7 @@ class PressInstallTest(unittest.TestCase):
     """The daemon presses Install on Steam's dialog for a missing tool: a SteamOS note first, then the install dialog."""
 
     def setUp(self):
-        self.mod = helpers.load("compat_default", "usr", "local", "bin", "sxx-compat-default")
+        self.mod = helpers.load("compat_default", "usr", "local", "bin", "mdeck-compat-default")
         self.calls = []
         self.mod.time.sleep = lambda s: None
 
@@ -93,7 +103,7 @@ class PressInstallTest(unittest.TestCase):
         def fake(js):
             self.calls.append(js)
             return R(next(it, ""))
-        self.mod.sxx_ui = fake
+        self.mod.mdeck_ui = fake
 
     def test_two_dialogs_are_confirmed_and_the_tool_name_is_in_the_script(self):
         self.stub(["", "clicked", "", "clicked"])

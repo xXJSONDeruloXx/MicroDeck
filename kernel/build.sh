@@ -78,9 +78,9 @@ cp "$RK/devices/H700/linux/linux.aarch64.conf" .config
 scripts/config --set-str CONFIG_INITRAMFS_SOURCE "$WORK/initramfs.cpio.gz"
 scripts/config --set-str CONFIG_EXTRA_FIRMWARE "$FW_LIST"
 scripts/config --set-str CONFIG_EXTRA_FIRMWARE_DIR external-firmware
-scripts/config --set-str CONFIG_DEFAULT_HOSTNAME rg40xx
-# A release name of its own (7.2.0-sxx) keeps this kernel's modules next to the stock 7.2.0 ones, so either can boot.
-scripts/config --set-str CONFIG_LOCALVERSION "-sxx"
+scripts/config --set-str CONFIG_DEFAULT_HOSTNAME microdeck
+# A release name of its own (7.2.0-mdeck) keeps this kernel's modules next to the stock 7.2.0 ones, so either can boot.
+scripts/config --set-str CONFIG_LOCALVERSION "-mdeck"
 # the additions this directory exists for
 scripts/config -e CONFIG_HIDRAW -m CONFIG_UHID -m CONFIG_HID_STEAM -m CONFIG_USBIP_CORE -m CONFIG_USBIP_VHCI_HCD
 # memory experiments: DAMON-driven reclaim, and access-time tracking for zram's idle recompression and writeback

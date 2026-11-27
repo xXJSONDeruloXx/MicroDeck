@@ -1,5 +1,5 @@
 #!/bin/bash
-# Rewrites the slot-2 card (the OS under test) from out/steamos-rg40xx.img without touching the device:
+# Rewrites the slot-2 card (the OS under test) from out/microdeck-rg40xx.img without touching the device:
 # boots muOS (slot 1, recovery), copies the gzipped image over adb, writes it to /dev/mmcblk1, then
 # FEL-boots the new system. The card's first boot grows the root partition. Games, Proton and the Steam
 # login are not in a lean image: tools/restore-steam.sh puts cache/steam-backup.tar back afterwards.
@@ -8,7 +8,7 @@ set -euo pipefail
 export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 MUOS=${MUOS_SERIAL:-0c001080c69249221d2}
-IMG=out/steamos-rg40xx.img
+IMG=out/microdeck-rg40xx.img
 step() { echo "== $(date +%H:%M:%S) $*"; }
 [ -f "$IMG" ] || { echo "build the image first: tools/build-image.sh"; exit 1; }
 

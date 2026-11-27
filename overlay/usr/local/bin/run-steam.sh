@@ -3,16 +3,16 @@
 . /etc/steam-session.conf
 root=$HOME/.local/share/Steam
 log=$HOME/steam-run.log
-. /usr/local/share/sxx/setup-ui.sh
-if [ ! -x "$root/steamrtarm64/steam" ] || [ ! -f "$root/compatibilitytools.d/$(. /usr/local/share/sxx/proton-armv8.conf; echo "$PROTON_NAME")/proton" ]; then
-  setup_ui_start "Setting up SteamOSXX"
+. /usr/local/share/mdeck/setup-ui.sh
+if [ ! -x "$root/steamrtarm64/steam" ] || [ ! -f "$root/compatibilitytools.d/$(. /usr/local/share/mdeck/proton-armv8.conf; echo "$PROTON_NAME")/proton" ]; then
+  setup_ui_start "Setting up MicroDeck"
   if [ ! -x "$root/steamrtarm64/steam" ]; then
     setup_ui 0 "Waiting for the internet connection..."
     waited=0
     until curl -fsI --max-time 10 https://client-update.steamstatic.com/ -o /dev/null || [ $? = 22 ]; do
       waited=$((waited + 5))
       if [ -e /sys/class/net/wlan0 ]; then
-        [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. On a PC, copy wifi.txt.example to wifi.txt on the card's STEAMBOOT partition, fill in ssid= and psk=, and restart."
+        [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. On a PC, copy wifi.txt.example to wifi.txt on the card's MICRODECK partition, fill in ssid= and psk=, and restart."
       else
         [ "$waited" -lt 30 ] || setup_ui 0 "No internet yet. This handheld has no Wi-Fi: plug it into a PC with the USB cable and share the PC's connection with it (README, Install)."
       fi
@@ -20,14 +20,14 @@ if [ ! -x "$root/steamrtarm64/steam" ] || [ ! -f "$root/compatibilitytools.d/$(.
     done
     setup_ui_run /usr/local/bin/steam-install.sh || { setup_ui_end; exit 1; }
   fi
-  setup_ui_run /usr/local/bin/sxx-install-proton || echo "== proton-armv8 install failed" >>"$log"
+  setup_ui_run /usr/local/bin/mdeck-install-proton || echo "== proton-armv8 install failed" >>"$log"
   setup_ui 100 "Starting Steam..."
   setup_ui_end
 fi
-# Linux x86 games run through a Steam compatibility tool that calls sxx-fex (Valve's FEX with Steam's x86 runtime)
+# Linux x86 games run through a Steam compatibility tool that calls mdeck-fex (Valve's FEX with Steam's x86 runtime)
 if [ -d "$root/compatibilitytools.d" ]; then
-  rm -rf "$root/compatibilitytools.d/sxx-fex"
-  cp -r /usr/local/share/sxx/compat/sxx-fex "$root/compatibilitytools.d/" && chmod +x "$root/compatibilitytools.d/sxx-fex/sxx-fex-tool"
+  rm -rf "$root/compatibilitytools.d/mdeck-fex" "$root/compatibilitytools.d/sx""x-fex"   # the second is the tool's name before the rename
+  cp -r /usr/local/share/mdeck/compat/mdeck-fex "$root/compatibilitytools.d/" && chmod +x "$root/compatibilitytools.d/mdeck-fex/mdeck-fex-tool"
 fi
 export STEAM_RUNTIME=1 STEAM_STEAMRT_RECURSION_GUARD=1
 export LD_LIBRARY_PATH=$root/steamrtarm64:$root/steamrtarm64/panorama
@@ -63,7 +63,7 @@ if [ "${STEAMOS:-0}" = 1 ]; then
   export STEAMOS_STEAM_SHUTDOWN_SENTINEL=/tmp/steamos-shutdown-sentinel
   export STEAM_ENABLE_VOLUME_HANDLER=1
   # Steam's UI turns on its gamescope behaviour (hide itself while a game window has focus, base-layer
-  # app queue) only when this is set. sxx-focus plays gamescope's side on Xorg; nothing listens here.
+  # app queue) only when this is set. mdeck-focus plays gamescope's side on Xorg; nothing listens here.
   [ "${GAMESCOPE_COMPAT:-1}" = 1 ] && export GAMESCOPE_WAYLAND_DISPLAY=gamescope-0
   rm -f "$STEAMOS_STEAM_REBOOT_SENTINEL" "$STEAMOS_STEAM_SHUTDOWN_SENTINEL"
 fi
@@ -75,14 +75,14 @@ while :; do
   # Steam re-extracts the whole client when its post-crash checksum pass finds the patched steamwebhelper.sh, so
   # start it stock and patch once the updater has finished verifying, before the client launches the web helper.
   /usr/local/bin/patch-webhelper.py --restore >>"$log" 2>&1
-  /usr/local/bin/sxx-compat-default --seed >>"$log" 2>&1
+  /usr/local/bin/mdeck-compat-default --seed >>"$log" 2>&1
   bootstrap=$root/logs/bootstrap_log.txt
   offset=$(stat -c %s "$bootstrap" 2>/dev/null || echo 0)
   ( tail -c +$((offset + 1)) -F "$bootstrap" 2>/dev/null | grep -a --line-buffered -E 'Verification complete|Update complete, launching' |
       while read -r _; do /usr/local/bin/patch-webhelper.py >>"$log" 2>&1; done ) &
   patcher=$!
   echo "== $(date -u +%FT%TZ) starting steam ${ui[*]} ${cef[*]} ${STEAM_EXTRA_ARGS:-}" >>"$log"
-  [ -n "${CDP_PORT:-}" ] && /usr/local/bin/sxx-steam-defaults >>"$log" 2>&1 &
+  [ -n "${CDP_PORT:-}" ] && /usr/local/bin/mdeck-steam-defaults >>"$log" 2>&1 &
   "$root/steamrtarm64/steam" -clientbeta "$(cat "$root/package/beta")" "${ui[@]}" \
     -no-cef-sandbox -cef-ozone-platform=x11 "${cef[@]}" ${STEAM_EXTRA_ARGS:-} >>"$log" 2>&1
   rc=$?

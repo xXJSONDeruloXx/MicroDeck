@@ -1,0 +1,24 @@
+#!/bin/sh
+# Fits a game window that is bigger than the panel by scaling the whole X screen (a RandR transform, done by the GPU through glamor),
+# letterboxed so the picture keeps its shape. Called by mdeck-focus.
+#   mdeck-fit W H     make an X screen of W x H show in full on the panel
+#   mdeck-fit reset   back to the panel's own size
+q=$(xrandr --query)
+out=$(echo "$q" | awk '/ connected/ {print $1; exit}')
+[ -n "$out" ] || exit 1
+rot=$(echo "$q" | grep ' connected' | head -1 | grep -o ' \(left\|right\|inverted\) (' | tr -d ' (')
+[ -n "$rot" ] || rot=normal
+# the output's native mode (first line under it), swapped when it is rotated sideways
+native=$(echo "$q" | awk '/ connected/ {f=1; next} f && /^ +[0-9]+x[0-9]+/ {print $1; exit}')
+nw=${native%x*} nh=${native#*x}
+case $rot in left|right) ow=$nh oh=$nw ;; *) ow=$nw oh=$nh ;; esac
+if [ "${1:-}" = reset ]; then
+  exec xrandr --fb "${ow}x${oh}" --output "$out" --rotate "$rot" --transform none 2>/dev/null
+fi
+w=$1 h=$2
+[ "$w" -gt 0 ] 2>/dev/null && [ "$h" -gt 0 ] 2>/dev/null || exit 2
+# s = framebuffer pixels per panel pixel, the larger of the two ratios so the whole picture fits; the offsets centre it
+t=$(awk -v w="$w" -v h="$h" -v ow="$ow" -v oh="$oh" 'BEGIN {
+  sx = w / ow; sy = h / oh; s = sx > sy ? sx : sy
+  printf "%.6f,0,%.3f,0,%.6f,%.3f,0,0,1", s, (w - s * ow) / 2, s, (h - s * oh) / 2 }')
+exec xrandr --fb "${w}x${h}" --output "$out" --rotate "$rot" --transform "$t" 2>/dev/null

@@ -16,7 +16,7 @@ Group 1: (Blocks 512-1023)
 
 class UsedChunksTest(unittest.TestCase):
     def setUp(self):
-        self.mod = helpers.load("used_chunks", "usr", "local", "sbin", "sxx-used-chunks")
+        self.mod = helpers.load("used_chunks", "usr", "local", "sbin", "mdeck-used-chunks")
 
     def test_parse_merges_free_ranges(self):
         bs, total, free = self.mod.parse(DUMP)

@@ -13,14 +13,14 @@ from session import VM
 STAGE = r"""
 set -e
 sync   # a copy of a live filesystem must not catch files whose data is still in the page cache
-U=/home/.sxx/update; rm -rf $U/root.img $U/boot $U/pending; mkdir -p $U/boot
+U=/home/.mdeck/update; rm -rf $U/root.img $U/boot $U/pending; mkdir -p $U/boot
 dd if=/dev/vda2 of=$U/root.img bs=1M conv=sparse status=none
 mkdir -p /mnt/r && mount -o loop $U/root.img /mnt/r
-echo {tag} > /mnt/r/etc/sxx-release
+echo {tag} > /mnt/r/etc/mdeck-release
 echo {tag} > /mnt/r/etc/qemu-marker
 {mutation}
 umount /mnt/r
-/usr/local/sbin/sxx-used-chunks $U/root.img > $U/root.chunks
+/usr/local/sbin/mdeck-used-chunks $U/root.img > $U/root.chunks
 cp -a /boot/firmware/. $U/boot/ && rm -f $U/boot/bootlog-* $U/boot/wifi.txt $U/boot/authorized_keys $U/boot/recovery.txt*
 echo {tag} > $U/pending; sync
 """
@@ -53,28 +53,28 @@ def install_release(vm, tag, mutation=""):
 def scenario_install(vm):
     print("== 1. a staged update installs, and is on trial until marked good")
     install_release(vm, "vA")
-    check(vm, "cat /etc/qemu-marker /etc/sxx-release", "vA", "root replaced by vA")
-    check(vm, "ls /home/.sxx/update", "trial", "vA is on trial")
-    check(vm, "cat /home/.sxx/update/installed/tag", "vA", "vA recorded as installed")
-    vm.sh("/usr/local/sbin/sxx-update good")
-    check(vm, "test -e /home/.sxx/update/trial && echo still || echo cleared", "cleared", "trial cleared once marked good")
+    check(vm, "cat /etc/qemu-marker /etc/mdeck-release", "vA", "root replaced by vA")
+    check(vm, "ls /home/.mdeck/update", "trial", "vA is on trial")
+    check(vm, "cat /home/.mdeck/update/installed/tag", "vA", "vA recorded as installed")
+    vm.sh("/usr/local/sbin/mdeck-update good")
+    check(vm, "test -e /home/.mdeck/update/trial && echo still || echo cleared", "cleared", "trial cleared once marked good")
 
 
 def scenario_rollback(vm):
     print("== 2. a release that does not boot rolls back after three tries")
     install_release(vm, "vB", BREAK)
     check(vm, "cat /etc/qemu-marker", "vA", "back on vA")
-    check(vm, "cat /home/.sxx/update/bad", "vB", "vB recorded as bad")
-    vm.sh("/usr/local/sbin/sxx-update good")
+    check(vm, "cat /home/.mdeck/update/bad", "vB", "vB recorded as bad")
+    vm.sh("/usr/local/sbin/mdeck-update good")
 
 
 def scenario_recovery(vm):
     print("== 3. recovery.txt asks for the previous release")
     install_release(vm, "vC")
-    vm.sh("/usr/local/sbin/sxx-update good")
+    vm.sh("/usr/local/sbin/mdeck-update good")
     check(vm, "cat /etc/qemu-marker", "vC", "on vC")
-    check(vm, "ls /home/.sxx/update/previous", "tag", "vA is kept as the previous release")
-    vm.sh("echo sxx=previous > /boot/firmware/recovery.txt; sync")
+    check(vm, "ls /home/.mdeck/update/previous", "tag", "vA is kept as the previous release")
+    vm.sh("echo mdeck=previous > /boot/firmware/recovery.txt; sync")
     vm.reboot()
     check(vm, "cat /etc/qemu-marker", "vA", "recovery.txt took it back to vA")
     check(vm, "ls /boot/firmware", "recovery.txt.used", "recovery.txt was consumed")
@@ -89,7 +89,7 @@ def main():
         scenario_install(vm)
     elif wanted != ["1"]:
         install_release(vm, "vA")   # the later scenarios need vA installed (and so kept as the previous release)
-        vm.sh("/usr/local/sbin/sxx-update good")
+        vm.sh("/usr/local/sbin/mdeck-update good")
     if "2" in wanted:
         scenario_rollback(vm)
     if "3" in wanted:

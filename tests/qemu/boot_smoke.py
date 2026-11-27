@@ -8,8 +8,8 @@ import sys
 from session import VM
 
 EXPECTED_FAILURES = {"inputplumber.service", "steam-session.service", "handheld-keys.service", "usb-gadget.service",
-                     "wifi-kick.service", "sxx-wifi-import.service", "bluetooth.service", "reach-guard.service",
-                     "systemd-modules-load.service", "sxx-mark-good.service", "sxx-zram-recompress.service",
+                     "wifi-kick.service", "mdeck-wifi-import.service", "bluetooth.service", "reach-guard.service",
+                     "systemd-modules-load.service", "mdeck-mark-good.service", "mdeck-zram-recompress.service",
                      "systemd-zram-setup@zram0.service", "earlyoom.service"}
 
 
@@ -27,9 +27,9 @@ def main():
 
     check("data partition", "findmnt -no SOURCE /home", "/dev/vda3")
     check("firstboot done", "ls /var/lib/firstboot.done", "firstboot.done")
-    check("release stamp", "cat /etc/sxx-release", "")
-    check("updater runs", "/usr/local/sbin/sxx-update status", "version:")
-    check("ssh host keys kept", "ls /home/.sxx/ssh-host-keys | head -1", "ssh_host")
+    check("release stamp", "cat /etc/mdeck-release", "")
+    check("updater runs", "/usr/local/sbin/mdeck-update status", "version:")
+    check("ssh host keys kept", "ls /home/.mdeck/ssh-host-keys | head -1", "ssh_host")
     check("overcommit sysctl", "sysctl -n vm.overcommit_memory", "1")
     rc, out = vm.sh("systemctl --failed --no-legend --plain | awk '{print $1}'")
     unexpected = sorted(set(out.split()) - EXPECTED_FAILURES)

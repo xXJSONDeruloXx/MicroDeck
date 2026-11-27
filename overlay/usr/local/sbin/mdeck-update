@@ -1,0 +1,129 @@
+#!/bin/bash
+# In-place OS updates from GitHub releases. Steam's System > Software Updates calls steamos-update, which lands here.
+#   mdeck-update check        exit 0 and print the tag when a newer release exists, 7 when not
+#   mdeck-update apply        download and stage it; the initramfs writes it at the next boot (debug/initramfs/init)
+#   mdeck-update steamos ...  the argument conventions of Valve's steamos-update
+# Staged on the data partition: root.img (the new root, 3 GiB) and boot/ (the new boot files). Nothing is written to the
+# running system; the boot-time step overwrites the root partition and the boot files, and /home is never touched.
+set -u
+[ -f /etc/mdeck-update.env ] && . /etc/mdeck-update.env   # MDECK_UPDATE_REPO / MDECK_UPDATE_API overrides, for testing
+REPO=${MDECK_UPDATE_REPO:-xXJSONDeruloXx/MicroDeck}
+API=${MDECK_UPDATE_API:-https://api.github.com/repos/$REPO/releases/latest}
+STATE=${MDECK_UPDATE_STATE:-/home/.mdeck/update}
+cur=$(cat "${MDECK_RELEASE_FILE:-/etc/mdeck-release}" 2>/dev/null || echo dev)
+dev=$(cat "${MDECK_DEVICE_FILE:-/etc/mdeck-device}" 2>/dev/null || echo rg40xx)   # releases carry one image per device
+say() { echo "mdeck-update: $*" >&2; }
+
+latest() {
+  mkdir -p "$STATE"
+  curl -fsS --max-time 30 -H 'Accept: application/vnd.github+json' "$API" -o "$STATE/latest.json" || return 1
+  python3 - "$STATE/latest.json" "$dev" <<'PY'
+import json, sys
+j = json.load(open(sys.argv[1]))
+a = {x["name"]: x["browser_download_url"] for x in j.get("assets", [])}
+print(j["tag_name"])
+print(a.get("microdeck-%s.img.xz" % sys.argv[2], ""))
+print(a.get("microdeck-%s.img.xz.sha256" % sys.argv[2], ""))
+print("reflash" if "FULL-REFLASH-REQUIRED" in (j.get("body") or "") else "ok")
+PY
+}
+
+newer() {
+  [[ "$cur" =~ ^v[0-9]+\.[0-9]+ ]] || return 1
+  [ -f "$STATE/bad" ] && [ "$(cat "$STATE/bad")" = "$1" ] && return 1   # rolled back from it: not offered again
+  [ "$cur" != "$1" ] && [ "$(printf '%s\n%s\n' "$cur" "$1" | sort -V | tail -1)" = "$1" ]
+}
+
+check() {
+  local out tag
+  out=$(latest) || { say "could not reach the release server"; return 7; }
+  tag=$(sed -n 1p <<<"$out")
+  newer "$tag" || return 7
+  echo "$tag"
+}
+
+apply() {
+  local out tag url shaurl flag want got bat=/sys/class/power_supply/battery
+  # the install is minutes of writes that must not be cut short: not on a low battery without the charger
+  if [ "$(cat $bat/status 2>/dev/null)" = Discharging ] && [ "$(cat $bat/capacity 2>/dev/null || echo 100)" -lt 40 ]; then
+    say "battery is below 40 % and not charging: plug in the charger first"; return 1
+  fi
+  out=$(latest) || { say "could not reach the release server"; return 1; }
+  { read -r tag; read -r url; read -r shaurl; read -r flag; } <<<"$out"
+  newer "$tag" || { say "already up to date ($cur)"; return 7; }
+  [ "$flag" = ok ] || { say "$tag needs a full reflash; see its release notes"; return 1; }
+  [ -n "$url" ] && [ -n "$shaurl" ] || { say "$tag has no image attached"; return 1; }
+  if [ -f "$STATE/pending" ] && [ "$(cut -d' ' -f1 "$STATE/pending")" = "$tag" ]; then say "$tag is already staged; restart to install it"; return 0; fi
+  [ "$(df -BM --output=avail /home | tail -1 | tr -dc 0-9)" -gt 5000 ] || { say "needs 5 GB free on the data partition"; return 1; }
+  mkdir -p "$STATE"; rm -f "$STATE/pending" "$STATE/tries"
+  want=$(curl -fsSL --max-time 30 "$shaurl" | awk '{print $1}')
+  [ -n "$want" ] || { say "could not read the checksum"; return 1; }
+  say "downloading $tag"
+  part="$STATE/img-$tag.xz.part"
+  find "$STATE" -maxdepth 1 -name 'img-*.xz.part' ! -name "img-$tag.xz.part" -delete
+  curl -fsSL --retry 8 --retry-delay 3 --retry-all-errors -C - -o "$part" "$url"
+  case $? in
+    0) ;;
+    33) rm -f "$part"; curl -fsSL --retry 8 --retry-delay 3 --retry-all-errors -o "$part" "$url" || { say "download failed"; return 1; } ;;
+    *) say "download failed (run again to resume)"; return 1 ;;
+  esac
+  got=$(sha256sum "$part" | awk '{print $1}')
+  [ "$got" = "$want" ] || { say "checksum mismatch, discarding the download"; rm -f "$part"; return 1; }
+  say "unpacking"
+  rm -rf "$STATE/root.img" "$STATE/root.chunks" "$STATE/boot" "$STATE/boot.img"
+  # layout contract (tools/build-image.sh): 16 MiB of MBR and U-Boot, a 256 MiB boot partition, then the 3 GiB root
+  xz -dc "$part" | {
+    dd of=/dev/null bs=1M count=16 iflag=fullblock status=none
+    dd of="$STATE/boot.img" bs=1M count=256 iflag=fullblock status=none
+    dd of="$STATE/root.img" bs=1M iflag=fullblock conv=sparse status=none
+  }
+  [ "$(stat -c %s "$STATE/root.img")" = 3221225472 ] || { say "unexpected image layout"; rm -f "$STATE/root.img" "$STATE/boot.img"; return 1; }
+  # the chunks of the root that hold anything the new filesystem uses: the install writes only those (mdeck-used-chunks)
+  /usr/local/sbin/mdeck-used-chunks "$STATE/root.img" > "$STATE/root.chunks.tmp" 2>/dev/null && mv "$STATE/root.chunks.tmp" "$STATE/root.chunks" || rm -f "$STATE/root.chunks.tmp" "$STATE/root.chunks"
+  mkdir -p "$STATE/boot" /run/mdeck-update-boot
+  mount -o loop,ro "$STATE/boot.img" /run/mdeck-update-boot && cp -a /run/mdeck-update-boot/. "$STATE/boot/"
+  umount /run/mdeck-update-boot; rmdir /run/mdeck-update-boot
+  [ -f "$STATE/boot/KERNEL" ] && [ -f "$STATE/boot/initrd.cpio.gz" ] || { say "boot files missing from the image"; return 1; }
+  rm -f "$part" "$STATE/boot.img"
+  sync
+  echo "$tag" > "$STATE/pending.tmp" && sync && mv "$STATE/pending.tmp" "$STATE/pending" && sync
+  say "$tag staged; it installs at the next restart (several minutes, do not power off)"
+}
+
+# Steam kills a steamos-update check after about five minutes, and a 340 MB download over this Wi-Fi can take longer: the
+# work runs as its own unit, so it survives that, and Steam's apply call waits for it (it showed "Applying" throughout).
+apply_detached() {
+  local unit=mdeck-update-run i
+  systemctl is-active --quiet $unit || systemd-run -q --unit=$unit --collect --nice=15 -p IOSchedulingClass=idle -p CPUWeight=20 /usr/local/sbin/mdeck-update apply
+  for i in $(seq 1 1440); do systemctl is-active --quiet $unit || break; sleep 5; done
+  [ -f "$STATE/pending" ] && return 0
+  check >/dev/null || return 7
+  return 1
+}
+
+# Images kept for a rollback that are not what is running (the card was reflashed since) are dropped. Dev builds are never
+# reconciled.
+reconcile() {
+  if [[ "$cur" =~ ^v[0-9]+\.[0-9]+ ]] && [ -f "$STATE/installed/tag" ] && [ "$(cat "$STATE/installed/tag")" != "$cur" ]; then
+    rm -rf "$STATE/installed" "$STATE/previous" "$STATE/bad" "$STATE/trial"
+  fi
+}
+# Called once Steam's UI has been up for a while: the release on trial is good, so the initramfs stops counting.
+good() { rm -f "$STATE/trial"; reconcile; }
+
+[ -n "${MDECK_UPDATE_SOURCED:-}" ] && return 0   # tests load the functions without running a command
+
+case "${1:-}" in
+  good) good ;;
+  reconcile) reconcile ;;
+  check) check ;;
+  apply) apply ;;
+  status) echo "version: $cur"; [ -f "$STATE/pending" ] && echo "staged: $(cat "$STATE/pending")"; true ;;
+  steamos)
+    shift
+    # Steam passes flags first (--enable-duplicate-detection check), so look for the verb anywhere
+    for a in "$@"; do [ "$a" = --supports-duplicate-detection ] && exit 0; done
+    for a in "$@"; do [ "$a" = check ] && { check; exit $?; }; done
+    apply_detached ;;
+  *) echo "usage: mdeck-update check|apply|status"; exit 2 ;;
+esac

@@ -1,0 +1,12 @@
+[Unit]
+Description=Small fixes inside Steam's UI pages (no cast button over launch-screen videos)
+After=steam-session.service
+
+[Service]
+ExecStart=/usr/local/bin/mdeck ui-fixes
+Restart=on-failure
+RestartSec=5
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

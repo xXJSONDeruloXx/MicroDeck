@@ -53,7 +53,7 @@ endian = 'little'
 EOF
 export PATH=/opt/native-tools/bin:$PATH
 rm -rf build-arm64
-meson setup build-arm64 --cross-file /tmp/cross.ini -Dprefix=/opt/mesa-sxx -Dbuildtype=release -Db_ndebug=true \
+meson setup build-arm64 --cross-file /tmp/cross.ini -Dprefix=/opt/mesa-mdeck -Dbuildtype=release -Db_ndebug=true \
   -Dvulkan-drivers=panfrost -Dgallium-drivers=panfrost -Dllvm=disabled -Dmesa-clc=system -Dprecomp-compiler=system \
   -Dplatforms=x11 -Dglx=dri -Degl=enabled -Dgbm=enabled -Dgles1=disabled -Dgles2=enabled -Dvideo-codecs= \
   -Dvulkan-layers= -Dlibunwind=disabled -Dlmsensors=disabled
@@ -61,5 +61,5 @@ ninja -C build-arm64 -j"$(nproc)"
 rm -rf /tmp/dest
 DESTDIR=/tmp/dest ninja -C build-arm64 install >/dev/null
 mkdir -p /w/out/mesa
-tar -C /tmp/dest -cJf /w/out/mesa/mesa-$VER-arm64.tar.xz opt/mesa-sxx
+tar -C /tmp/dest -cJf /w/out/mesa/mesa-$VER-arm64.tar.xz opt/mesa-mdeck
 ls -la /w/out/mesa/

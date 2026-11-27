@@ -10,7 +10,7 @@ export MSYS_NO_PATHCONV=1
 cd "$(dirname "$0")/.."
 restart=0; [ "${1:-}" = -r ] && { restart=1; shift; }
 KEY=secrets/id_ed25519
-HOST=${DEV_HOST:-rg40xx.local}
+HOST=${DEV_HOST:-microdeck-rg40xx.local}
 SSH=(ssh -p "${DEV_PORT:-22}" -i "$KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10)
 dev() { "${SSH[@]}" "root@$HOST" "$@"; }
 
@@ -55,19 +55,19 @@ dev "set -e
   [ -z \"\$missing\" ] || { echo \"push-live: installing \$missing\"; apt-get update -qq && apt-get install -y -qq --no-install-recommends -o Dpkg::Options::=--force-confold \$missing; }
   gcc -O2 -Wall -o /usr/local/bin/padmap /usr/local/src/padmap.c
   gcc -O2 -Wall -o /usr/local/bin/memload /usr/local/src/memload.c
-  mkdir -p /usr/local/lib/sxx && gcc -O2 -Wall -shared -fPIC -o /usr/local/lib/sxx/vk-fake-drm.so /usr/local/src/vk-fake-drm.c -ldl
-  gcc -O2 -Wall -o /usr/local/bin/sxx-focus /usr/local/src/sxx-focus.c -lX11 -lXRes
+  mkdir -p /usr/local/lib/mdeck && gcc -O2 -Wall -shared -fPIC -o /usr/local/lib/mdeck/vk-fake-drm.so /usr/local/src/vk-fake-drm.c -ldl
+  gcc -O2 -Wall -o /usr/local/bin/mdeck-focus /usr/local/src/mdeck-focus.c -lX11 -lXRes
   gcc -O2 -Wall -o /usr/local/sbin/reach-guard.new /usr/local/src/reach-guard.c && mv -f /usr/local/sbin/reach-guard.new /usr/local/sbin/reach-guard
   chmod +x /usr/local/bin/* /usr/local/sbin/*
   chmod 600 /etc/NetworkManager/system-connections/* 2>/dev/null || true
   systemctl daemon-reload
   systemd-tmpfiles --create /etc/tmpfiles.d/*.conf
   systemctl enable --now earlyoom.service >/dev/null 2>&1
-  systemctl enable sxx-wifi-import.service >/dev/null 2>&1
+  systemctl enable mdeck-wifi-import.service >/dev/null 2>&1
   systemctl restart reach-guard.service earlyoom.service
   if [ -e /swapfile ]; then swapoff /swapfile 2>/dev/null || true; rm -f /swapfile; fi"
 # The session reads these at start; a running Steam keeps the old copies until it restarts.
-if echo "$changed" | grep -qE '/(run-steam\.sh|steam-session[^/]*|sxx-[^/]*|steam-defaults\.js|patch-webhelper\.py|openbox[^ ]*)$|/etc/steam-session\.conf$|/etc/xdg/openbox/'; then
+if echo "$changed" | grep -qE '/(run-steam\.sh|steam-session[^/]*|mdeck-[^/]*|steam-defaults\.js|patch-webhelper\.py|openbox[^ ]*)$|/etc/steam-session\.conf$|/etc/xdg/openbox/'; then
   if [ "$restart" = 1 ]; then dev 'systemctl restart steam-session'; echo "push-live: steam-session restarted"
   else echo "push-live: session files changed; run 'systemctl restart steam-session' on the device (or push-live -r)"; fi
 fi
