@@ -3,6 +3,8 @@
 // have windows from GAMESCOPE_FOCUSABLE_APPS / _WINDOWS and GAMESCOPE_FOCUSED_*. This daemon plays the
 // gamescope side: it works out each window's app the way gamescope does, publishes the focusable lists and
 // activates the window of the first app in Steam's base-layer list through the window manager.
+// A game window bigger than the panel (old Linux games open 800x600 or 1280x720 windows) would be cut off, as it would not
+// be under gamescope, which scales it: sxx-fit scales the whole X screen to such a window while it has the focus.
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -21,6 +23,10 @@ static Window root;
 static Atom a_client_list, a_active, a_steam_game, a_bigpicture, a_overlay, a_input_focus, a_wm_state, a_pid, a_base_appid, a_base_window,
     a_focusable_apps, a_focusable_windows, a_focused_app, a_focused_app_gfx, a_focused_window;
 static int verbose;
+static const char *fit_cmd = "/usr/local/bin/sxx-fit";   // SXX_FIT overrides it (the tests)
+static int base_w, base_h;      // the panel's own logical size, read with the screen unscaled
+static Window fitted;           // the game window the screen is currently scaled to, 0 if none
+static int fitted_w, fitted_h;
 
 static int x_error(Display *dpy, XErrorEvent *e) { (void)dpy; (void)e; return 0; }
 
@@ -122,6 +128,33 @@ static void activate(Window w) {
   XRaiseWindow(d, w);
 }
 
+// Scale the X screen to the focused game window when that is bigger than the panel, and back when it is not.
+static void fit_screen(struct win *pick) {
+  XWindowAttributes wa;
+  if (pick && pick->appid != STEAM_APPID && XGetWindowAttributes(d, pick->w, &wa) && (wa.width > base_w || wa.height > base_h)) {
+    if (fitted != pick->w || fitted_w != wa.width || fitted_h != wa.height) {
+      // undecorated and at the origin, so the picture is the window and nothing else
+      Atom motif = XInternAtom(d, "_MOTIF_WM_HINTS", False);
+      long hints[5] = {2, 0, 0, 0, 0};
+      XChangeProperty(d, pick->w, motif, motif, 32, PropModeReplace, (unsigned char *)hints, 5);
+      XMoveWindow(d, pick->w, 0, 0);
+      XFlush(d);
+      char cmd[256];
+      snprintf(cmd, sizeof cmd, "%s %d %d", fit_cmd, wa.width, wa.height);
+      if (verbose) fprintf(stderr, "sxx-focus: %s\n", cmd);
+      if (system(cmd) == 0) { fitted = pick->w; fitted_w = wa.width; fitted_h = wa.height; }
+    }
+    return;
+  }
+  if (fitted) {
+    if (verbose) fprintf(stderr, "sxx-focus: resetting the screen\n");
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
+    if (system(cmd) != 0) fprintf(stderr, "sxx-focus: %s failed\n", cmd);
+    fitted = 0;
+  }
+}
+
 static void sync_focus(void) {
   unsigned long n;
   long *clients = get_cardinals(root, a_client_list, XA_WINDOW, &n);
@@ -180,6 +213,7 @@ static void sync_focus(void) {
     XChangeProperty(d, root, a_focused_app_gfx, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&app, app != 0);
     XChangeProperty(d, root, a_focused_window, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&w, 1);
   }
+  fit_screen(pick);
   Window want = overlay && (overlay_input || !pick) ? overlay : pick ? pick->w : 0;
   if (want && (Window)get_cardinal(root, a_active, 0) != want) activate(want);
   if (overlay) XRaiseWindow(d, overlay);
@@ -191,6 +225,14 @@ int main(int argc, char **argv) {
   if (!(d = XOpenDisplay(NULL))) { fprintf(stderr, "sxx-focus: cannot open display\n"); return 1; }
   XSetErrorHandler(x_error);
   root = DefaultRootWindow(d);
+  if (getenv("SXX_FIT")) fit_cmd = getenv("SXX_FIT");
+  {  // a crashed run may have left the screen scaled
+    char cmd[256];
+    snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
+    if (system(cmd) != 0) fprintf(stderr, "sxx-focus: %s failed\n", cmd);
+  }
+  XSync(d, False);
+  base_w = DisplayWidth(d, DefaultScreen(d)); base_h = DisplayHeight(d, DefaultScreen(d));
 #define A(v, s) v = XInternAtom(d, s, False)
   A(a_client_list, "_NET_CLIENT_LIST"); A(a_active, "_NET_ACTIVE_WINDOW"); A(a_steam_game, "STEAM_GAME");
   A(a_bigpicture, "STEAM_BIGPICTURE"); A(a_overlay, "STEAM_OVERLAY"); A(a_input_focus, "STEAM_INPUT_FOCUS"); A(a_wm_state, "WM_STATE");

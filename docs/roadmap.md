@@ -116,7 +116,10 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       heuristic refuses it and every fork fails with ENOMEM). Valve's FEX app ships the GL/DRM/ALSA/Vulkan thunks (guest and
       host). Plan: `sxx-fex` (FEX + Steam Linux Runtime 4.0 platform as guest root + thunks) as a Steam compatibility tool
       (`from_oslist linux`) for games with only a Linux build. S/M
-      Open items for it: (a) windows larger than the 640x480 panel (Eets is 800x600): try X-level scaling for the game's lifetime
+      Open items for it: (a) DONE 2026-11-27: windows larger than the 640x480 panel (Eets 800x600, Hotline Miami 1280x720) are fitted by
+      `sxx-focus` calling `sxx-fit W H` (a letterboxed RandR transform on the whole X screen, GPU-scaled through glamor; the game window
+      loses its decorations and moves to the origin; `sxx-fit reset` when focus leaves it); checked on the RG28XX with Hotline Miami, the
+      whole 1280x720 title and menu fit; the earlier idea was: X-level scaling for the game's lifetime
       (`xrandr --output DSI-1 --scale-from WxH` or `--transform`, measuring the cost of the software transform on the A53), or have
       `sxx-focus` resize an oversized window to the root size and see whether the game follows (SDL/FNA windows usually do not); (b) pad
       input in FEX games (Steam Input's virtual pad through FEX; only the keyboard was checked); (c) the launcher windows some games

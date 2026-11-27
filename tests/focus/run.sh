@@ -19,7 +19,13 @@ sleep 3
 # a second window of no app, mapped later (the "Steam" window stand-in)
 xmessage -name Other -geometry 200x100+300+0 "other" >/dev/null 2>&1 &
 sleep 2
-/tmp/sxx-focus >/tmp/focus.log 2>&1 &
+# stands in for sxx-fit: records what the daemon asks for
+cat > /tmp/fake-fit <<'EOF'
+#!/bin/sh
+echo "$@" >> /tmp/fit.calls
+EOF
+chmod +x /tmp/fake-fit; rm -f /tmp/fit.calls
+SXX_FIT=/tmp/fake-fit /tmp/sxx-focus >/tmp/focus.log 2>&1 &
 sleep 2
 xprop -root GAMESCOPE_FOCUSABLE_APPS | grep -q 123 || { cat /tmp/focus.log; fail "app 123 is not listed as focusable"; }
 echo "ok   the PID-less window was recognised as app 123 through XRes"
@@ -31,4 +37,13 @@ game=$(xwininfo -root -tree | grep Game123 | grep -o '0x[0-9a-f]*' | head -1)
 [ -n "$game" ] || fail "the game window does not exist"
 [ "$(printf '%d' "$active")" = "$(printf '%d' "$game")" ] || fail "active window $active is not the game's $game"
 echo "ok   the game window was activated"
+# a game window bigger than the 640x480 screen: the screen is fitted to it; when it shrinks back, the fit is undone
+xdotool windowsize "$game" 800 600
+sleep 3
+grep -q "^800 600$" /tmp/fit.calls || { cat /tmp/fit.calls /tmp/focus.log; fail "no fit to 800x600 for a window bigger than the screen"; }
+echo "ok   a window bigger than the screen was fitted (sxx-fit 800 600)"
+xdotool windowsize "$game" 200 100
+sleep 3
+tail -1 /tmp/fit.calls | grep -q "^reset$" || { cat /tmp/fit.calls /tmp/focus.log; fail "the fit was not undone when the window shrank"; }
+echo "ok   the fit was undone"
 echo "focus daemon test passed"
