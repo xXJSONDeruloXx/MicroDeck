@@ -109,6 +109,12 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       heuristic refuses it and every fork fails with ENOMEM). Valve's FEX app ships the GL/DRM/ALSA/Vulkan thunks (guest and
       host). Plan: `sxx-fex` (FEX + Steam Linux Runtime 4.0 platform as guest root + thunks) as a Steam compatibility tool
       (`from_oslist linux`) for games with only a Linux build. S/M
+      Open items for it: (a) windows larger than the 640x480 panel (Eets is 800x600): try X-level scaling for the game's lifetime
+      (`xrandr --output DSI-1 --scale-from WxH` or `--transform`, measuring the cost of the software transform on the A53), or have
+      `sxx-focus` resize an oversized window to the root size and see whether the game follows (SDL/FNA windows usually do not); (b) pad
+      input in FEX games (Steam Input's virtual pad through FEX; only the keyboard was checked); (c) the launcher windows some games
+      show first (Hotline Miami's Qt launcher needs a pointer): a per-game launch option that skips it; (d) Steam installing the FEX tool
+      and Linux Runtime 4.0 by itself (`require_tool_appid` is in the tool's manifest, untested). 
 - [~] Never livelock on memory: earlyoom (games first), MGLRU `min_ttl_ms`, PSI game kill in the
       memory-locked `reach-guard` (plus a real sshd probe). Verify with a deliberate memory hog. S
 - [x] Game windows on top, Steam button menu over games and back: `GAMESCOPE_WAYLAND_DISPLAY` turns on
