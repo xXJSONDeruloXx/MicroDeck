@@ -1,0 +1,19 @@
+#!/bin/sh
+# After a resume: bind the SDIO Wi-Fi chip again (the sleep hook unbound it) and wait for wlan0. Its first probe right after resume can
+# time out (-110), so it is retried; if it never comes back the handheld is awake but cut off from the network, and a reboot is the
+# only reliable way out. Everything is logged to the journal (journalctl -t sxx-sleep).
+STATE=/run/sxx-sleep-sdio
+[ -f "$STATE" ] || exit 0
+for try in 1 2 3 4 5 6 7 8; do
+  while read -r dev drv; do
+    [ -e "/sys/bus/sdio/devices/$dev/driver" ] || echo "$dev" > "/sys/bus/sdio/drivers/$drv/bind" 2>/dev/null || echo "$dev" > /sys/bus/sdio/drivers_probe
+  done < "$STATE"
+  sleep 3
+  if ls /sys/class/net | grep -q "^wlan"; then
+    logger -t sxx-sleep "wlan0 is back after try $try"
+    exit 0
+  fi
+  logger -t sxx-sleep "wlan0 not back after try $try: $(dmesg | grep -E 'rtw88|mmc2' | tail -2 | tr '\n' '|' | cut -c1-200)"
+done
+logger -t sxx-sleep "wlan0 did not come back after the wake; rebooting"
+systemctl reboot

@@ -24,17 +24,8 @@ case "$1" in
     # The press that woke the handheld arrives as a power-key event right after resume; without this it would put it to sleep again.
     systemd-run --no-block --quiet --unit=sxx-sleep-holdoff \
       systemd-inhibit --what=handle-power-key --who=sxx-sleep --why="just woke up" --mode=block sleep 3
-    # The chip's first probe right after resume can time out (-110): retry in the background until wlan0 is back, so the resume is not held up.
-    if [ -f "$STATE" ]; then
-      systemd-run --no-block --quiet --unit=sxx-sleep-wifi sh -c '
-        for try in 1 2 3 4 5 6; do
-          while read -r dev drv; do
-            [ -e "/sys/bus/sdio/devices/$dev/driver" ] || echo "$dev" > "/sys/bus/sdio/drivers/$drv/bind" 2>/dev/null || echo "$dev" > /sys/bus/sdio/drivers_probe
-          done < '"$STATE"'
-          sleep 3
-          ls /sys/class/net | grep -q "^wlan" && exit 0
-        done'
-    fi
+    # in the background, so the resume is not held up
+    [ -f "$STATE" ] && systemd-run --no-block --quiet --unit=sxx-sleep-wifi /usr/local/sbin/sxx-sleep-wifi
     systemctl start inputplumber
     touch /run/sxx-sleep-woke
     ;;

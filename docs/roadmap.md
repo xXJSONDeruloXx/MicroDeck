@@ -234,7 +234,11 @@ trixie userspace. No gaming stack, but several transferable parts:
       Candidates: the long RTC alarm did not fire (try +120, +300, +600 on the RG28XX over adb, where a failure is visible), the Wi-Fi chip
       lost power over a long sleep and the 18 s rebind retry gave up (the unit has no USB link to look), or something on resume that a long sleep
       exposes (reach-guard, thermals, the watchdog). Needs the handheld's serial console or a USB cable on the PC, and a power-button press
-      to get it back. Until a long sleep wakes reliably the feature stays opt-in. Next: someone presses the power button
+      to get it back. Until a long sleep wakes reliably the feature stays opt-in. Follow-up the same morning: the RG28XX (USB link, no Wi-Fi chip)
+      slept 3 min, 10 min and 30 min and woke at 180.7 s, 600.8 s and 1800.7 s (RTC), so long alarms work and the failure is specific to the
+      RG40XX-H: the leading suspect is its Wi-Fi chip not returning after a long sleep (awake but cut off; reach-guard only probes sshd locally).
+      `sxx-sleep-wifi` now retries the rebind 8 times, logs each try (`journalctl -t sxx-sleep`) and reboots as a last resort. The failed unit's
+      previous boot journal (`journalctl -b -1` after a power cycle) says whether it woke and what the hook saw: read it first. Next: someone presses the power button
       during `sxx-sleep test` on each handheld; if it reports `power-button`, make sleep the default. Then: battery drain while asleep (Handtop
       reports 5-6 %/hour; measure on battery, both handhelds were on USB power), mute the DAC before sleeping and unmute after, Wi-Fi
       reconnect time on the RG40XX-H after resume, what Steam's own idle-sleep timer does, and rtc1's clock (set it from system time at boot). M
