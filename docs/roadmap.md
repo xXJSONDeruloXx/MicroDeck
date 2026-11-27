@@ -94,6 +94,12 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       `wifi.powersave=2`), signal and rate (`iw dev wlan0 station dump`), the rtw88 module options (`disable_lps_deep`, `disable_msi`),
       SDIO clock, an `iperf3` run against the PC. If 5 GHz is the fix, prefer it in `wifi.txt` handling (`band=a` for the connection) and in
       NetworkManager's roaming settings. First start would drop from about an hour to minutes. S/M
+      Measured 2026-11-27 (v0.7.0): the radio is not the limit. RG40XX-H on 5 GHz (-59 dBm, 390/263 Mbit/s, power save off): a plain
+      `curl` download from Cloudflare runs at 10.4 MB/s; the RG28XX over the USB share, 12.2 MB/s. A weak 2.4 GHz or -79 dBm link is the
+      likely cause of the old ~1 MB/s. The card is the next limit: slot 1 runs SD high-speed at 3.3 V (`mmc0: new high speed SDXC card`, 50 MHz
+      4-bit; the device tree has `no-1-8-v` and no `vqmmc` supply, as on the board), so sequential I/O tops out near 23 MB/s read and 18-22 MB/s
+      write with fsync, on both handhelds. Steam's own download pipeline (zstd, SHA, many small files, fsync) is what is left to look at: time a
+      real Steam install with `iostat`/`top` before changing anything. S/M
 
 ## 2. Games
 - [x] Renderer choice on this GPU (WineD3D on Panfrost via `PROTON_USE_WINED3D=1`; DXVK per game): compare DXVK-on-llvmpipe vs `PROTON_USE_WINED3D=1` (Panfrost GL 3.1)
