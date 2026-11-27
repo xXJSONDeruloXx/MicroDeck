@@ -29,7 +29,7 @@ RUN chmod 700 /root/.ssh /home/steam/.ssh && chown -R steam:steam /home/steam/.s
  && find /etc/systemd /etc/ssh/sshd_config.d /etc/NetworkManager/conf.d /etc/steam-session.conf -type f -exec chmod 644 {} + \
  && chmod +x /usr/local/bin/* /usr/local/sbin/* /usr/bin/inputplumber \
  && systemctl enable ssh.service NetworkManager.service usb-gadget.service firstboot.service \
-      wifi-kick.service steam-session.service systemd-timesyncd.service reach-guard.service earlyoom.service handheld-keys.service sxx-wifi-import.service inputplumber.service sxx-zram-recompress.service bluetooth.service sxx-mark-good.service \
+      wifi-kick.service steam-session.service systemd-timesyncd.service reach-guard.service earlyoom.service handheld-keys.service sxx-wifi-import.service inputplumber.service sxx-zram-recompress.service bluetooth.service sxx-mark-good.service sxx-battery.service \
  && if [ "$DEV_MODE" = 1 ]; then \
       systemctl enable sxx-vpad.service; \
       ln -sfn /usr/lib/systemd/system/reboot.target /etc/systemd/system/poweroff.target; \

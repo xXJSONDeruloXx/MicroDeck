@@ -85,7 +85,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [~] Pin the Steam bootstrap: `tools/fetch-steam.sh` installs the arm64 client from the CDN manifest
       (each package SHA256-checked) into a clean seed tar; `STEAM_SEED=` puts it in the image. Still to do:
       pin a manifest version, and check that the first start does not re-download. M
-- [ ] CI: GitHub Actions builds U-Boot, rootfs and image (arm64 runners or QEMU). M
+- [x] CI: GitHub Actions builds U-Boot, kernel, InputPlumber, rootfs and image, runs the unit tests and boots the image in QEMU. M
 
 ## 2. Games
 - [x] Renderer choice on this GPU (WineD3D on Panfrost via `PROTON_USE_WINED3D=1`; DXVK per game): compare DXVK-on-llvmpipe vs `PROTON_USE_WINED3D=1` (Panfrost GL 3.1)
@@ -186,7 +186,8 @@ trixie userspace. No gaming stack, but several transferable parts:
       `rtcwake -m freeze` plus a 20 s alarm set from the system clock (`echo $(( $(date +%s) + 20 )) > /sys/class/rtc/rtc1/wakealarm`)
       after writing the correct time to rtc1 through `/sys/class/rtc/rtc1/` or `hwclock` (install util-linux-extra). The QEMU virtual
       device cannot test this (no H700 power domains), so it is the one item that waits for the handheld. Handtop reports ~5-6 %/hour in s2idle. M
-- [ ] Battery saver: cap the CPU at 1.0 GHz and dim the screen on low battery; clean shutdown at 5 % (Handtop's policy). S
+- [x] Battery guard (2026-11-26, `sxx-battery`): on battery, below 15 % the CPU is capped at 1.008 GHz (lifted when charging or above 20 %), at
+      5 % it syncs and powers off cleanly. Policy is unit-tested; needs a discharge test on the handheld (screen dimming is Steam's). S
 - [x] Rumble (patch carried 2026-11-26, in the next kernel build; verify on hardware): Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
       atomic context but takes a mutex the PWM work item holds; freezes the whole handheld) and patches it
       (`build/kernel/rocknix-joypad/0001-rumble-no-mutex-in-atomic-context.patch`). We build the same driver
