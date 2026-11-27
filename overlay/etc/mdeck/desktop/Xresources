@@ -1,0 +1,7 @@
+XTerm*renderFont: true
+XTerm*faceName: DejaVu Sans Mono
+XTerm*faceSize: 10
+XTerm*scrollBar: false
+XTerm*saveLines: 2000
+XTerm*background: #1b2430
+XTerm*foreground: #e6e6e6

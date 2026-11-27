@@ -2,8 +2,11 @@
 # Desktop mode session client, run by startx instead of Steam (see steam-session-x): openbox, a panel and the pad daemon.
 # Ends when openbox ends; steamos-session-select gamescope (menu entry, or Start held) closes it and the session restarts into Steam.
 export XDG_CURRENT_DESKTOP=openbox
+# no accessibility bus here; GTK apps would otherwise spend memory and log warnings looking for it
+export NO_AT_BRIDGE=1
 /usr/local/bin/mdeck-rotate
 xset s off -dpms 2>/dev/null
+xrdb -merge /etc/mdeck/desktop/Xresources 2>/dev/null
 xsetroot -solid '#1b2430' -cursor_name left_ptr
 openbox --config-file /etc/mdeck/desktop/rc.xml &
 ob=$!
