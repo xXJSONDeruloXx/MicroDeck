@@ -43,3 +43,17 @@ unit tests and syntax checks run anywhere: `tools/ci-checks.sh`. Docker and QEMU
 `overlay/` is the root filesystem overlay (scripts under `usr/local/bin` and `usr/local/sbin`); `debug/initramfs/init` is the boot
 step that installs updates; `kernel/` rebuilds the kernel; `rootfs/` the image layers; `docs/findings.md` is the lab notebook,
 `docs/roadmap.md` the plan with statuses, `docs/games.md` the compatibility table.
+
+## Hardware checks before a release
+Run these on the handheld after flashing the CI image (`xz -dc out/latest/steamos-rg40xx.img.xz > out/steamos-rg40xx.img`, then
+`tools/reflash-slot2.sh`; the data partition keeps Steam, games and the login). Put Steam in offline mode first if other devices use the
+account. Anything that fails is a release blocker; the VM already covers boot, firstboot, updater and rollback.
+1. `tools/smoke.sh`; `uname -r` shows `7.2.0-sxx`; `cat /etc/sxx-release`.
+2. `sxx-gametest 8400` (Geometry Wars, Proton) passes: game in front, Steam menu over it, back, quit.
+3. A Linux x86 game under FEX (`sxx-gametest 219150` or 6100): window in front, picture painting. `vm.overcommit_memory` is 1.
+4. Controller: glyphs in Steam are Deck ones, D-pad and sticks work in a game, rumble works (the joypad driver patch), no `BUG:`
+   or `scheduling while atomic` in `dmesg` while rumbling.
+5. Steam Settings > Bluetooth scans; Settings > System > Check For Updates works against the real GitHub release.
+6. Wi-Fi: `iw dev wlan0 link` (band, rate) and a 100 MB download timing; `band=a` in `wifi.txt` if 5 GHz is available.
+7. Battery: `systemctl status sxx-battery` is active; `cat /sys/class/power_supply/battery/{status,capacity}`.
+8. Optional: `tools/mesa/try-on-device.sh` for the Mesa 26.3 PanVK report.
