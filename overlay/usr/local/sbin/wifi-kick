@@ -1,6 +1,8 @@
 #!/bin/sh
 # rtw88_8821cs is built into the kernel and can probe before the root filesystem
 # (and its firmware) is mounted. If no wlan interface shows up, rebind the SDIO function.
+# No SDIO function at all (the RG28XX has no Wi-Fi chip): nothing to wait for, and NetworkManager must not wait for it either.
+ls /sys/bus/sdio/devices/* >/dev/null 2>&1 || exit 0
 for i in $(seq 1 20); do
   ls /sys/class/net | grep -q '^wlan' && exit 0
   sleep 1
