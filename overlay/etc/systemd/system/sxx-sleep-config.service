@@ -1,0 +1,12 @@
+[Unit]
+Description=Turn on sleep when the boot partition has a "sleep" file
+RequiresMountsFor=/boot/firmware
+Before=systemd-logind.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sxx-sleep-config
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

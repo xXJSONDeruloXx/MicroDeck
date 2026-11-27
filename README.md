@@ -32,7 +32,7 @@ brings KMS, Panfrost, PipeWire, user namespaces and SysV IPC.
 | Memory (1 GB) | managed | zstd zram at 2x RAM, earlyoom, MGLRU thrash guard, and a guard that ends a game on sustained memory stalls |
 | Wi-Fi | yes | RTL8821CS (rtw88), NetworkManager |
 | Bluetooth | yes | the same chip, bluez; Steam's Bluetooth page scans (pairing not yet tried), PipeWire audio |
-| Sleep / wake | not yet | needs TF-A's H616 PSCI system-suspend support |
+| Sleep / wake | opt-in | s2idle works (wake from the RTC verified, with a game running too); the power-button wake still needs a physical check on each handheld: `sxx-sleep on`, `sxx-sleep test` (docs/roadmap.md) |
 | gamescope | emulated | real gamescope runs on llvmpipe with a small shim but costs ~90 % of a core and crashes Steam here (docs/findings.md); Steam runs in its gamescope mode against Xorg + `sxx-focus` |
 | Standalone boot from slot 1 | yes | the same image boots from a card in slot 1 with no muOS or PC (2026-11-25); development still uses slot 2 through FEL |
 | First start | yes | downloads Valve's arm64 Steam client and the pinned ARMv8.0 Proton, with a progress window, and makes that Proton the default |

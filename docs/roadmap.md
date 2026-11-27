@@ -218,18 +218,20 @@ trixie userspace. No gaming stack, but several transferable parts:
 - [x] `recovery.txt` on the boot partition with `sxx=previous` forces the previous release at the next boot (done; the
       initramfs reads it, renames it to `.used`).
 - [x] The updater refuses below 40 % battery without the charger (done in `sxx-update apply`).
-- [ ] **Sleep with s2idle** instead of waiting for TF-A suspend: the kernel already offers `s2idle` (default `mem_sleep`).
-      First test 2026-11-26: the suspend was refused by `vhci_hcd` ("1 active connection", the virtual Deck controller), so
-      InputPlumber must be stopped (or its USB/IP port detached) before and started after; then a wake source: the sun6i RTC
-      is `/dev/rtc1` (`/dev/rtc0` is an I2C RTC without wakeup) and holds 1970, so set it from system time first
-      (`hwclock` is not installed). A test with the virtual pad stopped left the device unreachable (the wake did not fire):
-      find a wake that works (power key `axp20x-pek`, RTC alarm) before any release. Checklist for the next attempt, done with the
-      device on a charger and someone able to press the power button: which IRQs are wake-enabled (`cat /sys/kernel/irq/*/wakeup`,
-      `/sys/class/wakeup/*`, `/proc/interrupts`), the sun6i RTC driver's suspend path in our kernel, whether the NMI/AXP717 line
-      (`sunxi-nmi`) is a wake IRQ, `/sys/power/pm_wakeup_irq` after a wake, `pm_debug_messages`, and do the first attempts with
-      `rtcwake -m freeze` plus a 20 s alarm set from the system clock (`echo $(( $(date +%s) + 20 )) > /sys/class/rtc/rtc1/wakealarm`)
-      after writing the correct time to rtc1 through `/sys/class/rtc/rtc1/` or `hwclock` (install util-linux-extra). The QEMU virtual
-      device cannot test this (no H700 power domains), so it is the one item that waits for the handheld. Handtop reports ~5-6 %/hour in s2idle. M
+- [~] **Sleep with s2idle** (2026-11-27: WORKS on the RG28XX with an RTC wake; the power-button wake is the one part not yet confirmed).
+      The kernel offers `s2idle` and needs no TF-A support. What it took: (1) `vhci_hcd` refuses to suspend while a device is attached
+      (Steam's virtual Deck controller), so InputPlumber is stopped before and started after (`/usr/lib/systemd/system-sleep/sxx-sleep`);
+      (2) the SoC RTC `rtc1` (sun6i, `7000000.rtc`, GIC IRQ 136, wake enabled) wakes it, `rtc0` is an I2C pcf8563 chip with no wired alarm;
+      its clock starts at 1972 and an absolute alarm time then never fires, so use a relative alarm (`echo +30 > /sys/class/rtc/rtc1/wakealarm`).
+      Measured with the full stack: `systemctl suspend` with Steam running and with a game in front (Geometry Wars) slept 35-40 s and
+      resumed: panel re-initialised, USB network back, Steam UI and virtual pad back, the game still focused, audio sink present. The
+      resume came from the RTC alarm each time. Shipped OFF by default (v0.7.1+): an empty file `sleep` on the boot partition (or
+      `sxx-sleep on`) turns it on (`/run/systemd/sleep.conf.d/50-sxx.conf`: AllowSuspend=yes, freeze; logind: short power press suspends, long
+      press powers off; a 3 s power-key hold-off after resume so the waking press does not sleep it again). `sxx-sleep test [secs]` sleeps
+      through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). Next: someone presses the power button
+      during `sxx-sleep test` on each handheld; if it reports `power-button`, make sleep the default. Then: battery drain while asleep (Handtop
+      reports 5-6 %/hour; measure on battery, both handhelds were on USB power), mute the DAC before sleeping and unmute after, Wi-Fi
+      reconnect time on the RG40XX-H after resume, what Steam's own idle-sleep timer does, and rtc1's clock (set it from system time at boot). M
 - [x] Battery guard (2026-11-26, `sxx-battery`): on battery, below 15 % the CPU is capped at 1.008 GHz (lifted when charging or above 20 %), at
       5 % it syncs and powers off cleanly. Policy is unit-tested; needs a discharge test on the handheld (screen dimming is Steam's). S
 - [x] Rumble (patch carried 2026-11-26, in the next kernel build; verify on hardware): Handtop found a deadlock in the ROCKNIX `rocknix-singleadc-joypad` driver (the ff-memless play callback runs in
