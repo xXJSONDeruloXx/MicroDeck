@@ -464,3 +464,11 @@ on another computer, so game runs need the account free.
   there is harmless; metadata is never free. `tools/qemu/verify-chunks.sh` proves it on a real image by installing onto a random-filled
   target and requiring a clean `e2fsck -fn` and `diff -r` equal trees. The first version of the parser fell back to the whole image on an
   unexpected line, which is the intended failure mode.
+
+### Mesa 26.3.1 PanVK cross-build (2026-11-26)
+`tools/mesa/build.sh` builds Mesa 26.3.1 for arm64 in an amd64 container: the build-time tools (`mesa_clc`, `panfrost_compile`) are built
+natively with LLVM 19 first, then a cross build with `-Dvulkan-drivers=panfrost -Dgallium-drivers=panfrost -Dllvm=disabled
+-Dplatforms=x11` into `/opt/mesa-sxx` (7 MB). Gotchas met: Debian 13's `wayland-scanner` is too old for Mesa's wayland-protocols 1.49 (so
+X11 only, which is all the session uses), and the cross build needs `panfrost_compile` from a native Panfrost build. A Vulkan loader on a
+Debian arm64 userland finds the ICD (`panfrost_icd.cortex-a53.json`) and loads `libvulkan_panfrost.so` with no unresolved symbols; the
+only complaint is "no valid GPUs", as expected without a Mali. The test on the Mali-G31 itself is `tools/mesa/try-on-device.sh`.
