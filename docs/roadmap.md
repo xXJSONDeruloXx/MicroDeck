@@ -59,7 +59,8 @@ notes (docs/design/*.md, docs/boot-time.md) have ideas, ranked by value over eff
       survived. (Found and fixed on the way: the image must end exactly at the end of the root.)
 - [ ] Pre-seed or background-fetch Steam and Proton: ship them on the data partition or fetch them in a `Nice=19`,
       idle-I/O unit with chunked, hash-verified, resumable downloads (their updater pattern), removing the 1.1 GB
-      first-start wait. M
+      first-start wait. Note (2026-11-26): the slow part is the handheld's Wi-Fi (~1 MB/s), not the source: Valve's client cannot be shipped,
+      and shipping Proton would save only about 7 of 58 minutes, so fix the Wi-Fi speed first (section 2.5 below). M
 - [ ] Mesa trimming: nibOS builds Panfrost-only with no LLVM (libgallium 21 MB instead of 54 MB plus 171 MB libLLVM)
       and carries two Panfrost patches (write-combined index scan, keep BOs mapped). The G31 uses Panfrost too, but we
       rely on llvmpipe for the DXVK CPU path, so test a Panfrost-only build against the cost of losing that. M
@@ -71,7 +72,7 @@ notes (docs/design/*.md, docs/boot-time.md) have ideas, ranked by value over eff
       boot (root first, boot files last through rename, `pending` marker makes an interrupted install repeat). Verified from
       Steam's UI on hardware, twice. Rollback added (2026-11-26): the last installed image is kept, a release is on trial until Steam's UI has been up 30 s, three failed boots reinstall the previous one (tested with a deliberately broken release). Still open: A/B root and signed, chunked updates (minisign
       manifest, 16 MiB zstd chunks, `min_from` and state `migrate` numbers): the
-      install is ten minutes of SD writes (reading to skip unchanged blocks is no faster on this card). L
+      install writes only the used chunks of the new root (about half of the 3 GiB; reading to skip unchanged blocks is no faster on this card). L
 - [ ] Read-only root with a writable overlay on the state partition, which makes slot images reproducible. M
 - [ ] SPL Falcon boot (skip U-Boot proper) for boot time: needs an Allwinner port, boot time is not our main pain. L
 Not copied: Arch as the base, lz4-only zram (our lzo-rle plus idle zstd keeps the capacity), 3 GiB root slots (too big
