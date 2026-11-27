@@ -1,5 +1,10 @@
 #!/bin/bash
 # X session client, run by startx as the steam user: window manager, then Steam.
+# Desktop mode: chosen in Steam's power menu (steamos-session-select desktop); the next session start runs the desktop instead of Steam.
+if [ "$(cat "$HOME/.config/mdeck/session" 2>/dev/null)" = desktop ]; then
+  echo gaming > "$HOME/.config/mdeck/session"
+  exec -a mdeck-desktop /usr/local/bin/mdeck-desktop
+fi
 /usr/local/bin/mdeck-rotate
 xset s off -dpms 2>/dev/null
 # Mirrors SteamOS's gamescope-session (--hide-cursor-delay 3000): the cursor starts hidden, shows when

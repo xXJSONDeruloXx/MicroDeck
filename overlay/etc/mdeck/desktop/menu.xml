@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="MicroDeck">
+    <item label="Web browser"><action name="Execute"><command>firefox-esr</command></action></item>
+    <item label="Documents (AbiWord)"><action name="Execute"><command>abiword</command></action></item>
+    <item label="Spreadsheets (Gnumeric)"><action name="Execute"><command>gnumeric</command></action></item>
+    <item label="Text editor"><action name="Execute"><command>mousepad</command></action></item>
+    <item label="Files"><action name="Execute"><command>pcmanfm</command></action></item>
+    <item label="Terminal"><action name="Execute"><command>xterm</command></action></item>
+    <separator/>
+    <item label="Windows"><action name="ShowMenu"><menu>client-list-combined-menu</menu></action></item>
+    <separator/>
+    <item label="Return to gaming mode"><action name="Execute"><command>/usr/local/bin/steamos-session-select gamescope</command></action></item>
+    <item label="Restart"><action name="Execute"><command>systemctl reboot</command></action></item>
+    <item label="Shut down"><action name="Execute"><command>systemctl poweroff</command></action></item>
+  </menu>
+</openbox_menu>

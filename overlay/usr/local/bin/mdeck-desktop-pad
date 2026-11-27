@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""Desktop mode controller: the built-in pad becomes a virtual mouse and keyboard (uinput).
+
+Pointer mode (default): d-pad or left stick moves the pointer, right stick or L2 + d-pad scrolls, A left click (hold drags),
+B right click, X on-screen keyboard (X and Y as Steam names them), Y middle click, L1 Esc, R1 Enter, R2 Backspace, Select toggles keys mode, Start opens the menu.
+Keys mode (menus, lists): d-pad sends the arrow keys, A Enter, B Esc.
+Start held for two seconds returns to Steam's gaming mode.
+"""
+import fcntl
+import glob
+import os
+import select
+import signal
+import struct
+import subprocess
+import sys
+import time
+
+# input-event-codes.h
+EV_SYN, EV_KEY, EV_REL, EV_ABS = 0, 1, 2, 3
+REL_X, REL_Y, REL_HWHEEL, REL_WHEEL = 0, 1, 6, 8
+ABS_X, ABS_Y, ABS_RX, ABS_RY = 0, 1, 3, 4
+BTN_LEFT, BTN_RIGHT, BTN_MIDDLE = 0x110, 0x111, 0x112
+BTN = {"south": 304, "east": 305, "north": 307, "west": 308, "tl": 310, "tr": 311, "tl2": 312, "tr2": 313,
+       "select": 314, "start": 315, "mode": 316, "thumbl": 317, "thumbr": 318,
+       "up": 544, "down": 545, "left": 546, "right": 547}
+KEY_ESC, KEY_BACKSPACE, KEY_TAB, KEY_ENTER, KEY_LEFTALT, KEY_LEFTCTRL, KEY_LEFTMETA = 1, 14, 15, 28, 56, 29, 125
+KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN, KEY_F4, KEY_C, KEY_V = 103, 105, 106, 108, 62, 46, 47
+KEY_MENU, KEY_SCROLLLOCK = 127, 70  # bound by openbox (Menu, Scroll_Lock) to its root menu and window list
+
+EVIOCGRAB = 0x40044590
+UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_RELBIT = 0x40045564, 0x40045565, 0x40045566
+UI_DEV_SETUP, UI_DEV_CREATE, UI_DEV_DESTROY = 0x405C5503, 0x5501, 0x5502
+EVENT = struct.Struct("llHHi")
+
+POINTER_MIN, POINTER_MAX, RAMP = 120.0, 700.0, 0.9  # px/s; seconds from min to max while held
+DEADZONE = 0.18
+SCROLL_TICKS = 6.0  # wheel clicks per second at full deflection
+HOME = os.path.expanduser("~")
+STATE = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+
+
+def find_pad():
+    # MDECK_PAD_NAME points the daemon at the virtual test pad (mdeck pad) instead of the built-in one
+    want = 'Name="%s"' % os.environ.get("MDECK_PAD_NAME", "H700 Gamepad")
+    for line in open("/proc/bus/input/devices").read().split("\n\n"):
+        if want in line:
+            for tok in line.split():
+                if tok.startswith("event"):
+                    return "/dev/input/" + tok
+    return None
+
+
+class Uinput:
+    def __init__(self, name, keys=(), rels=()):
+        self.fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+        fcntl.ioctl(self.fd, UI_SET_EVBIT, EV_KEY)
+        for k in keys:
+            fcntl.ioctl(self.fd, UI_SET_KEYBIT, k)
+        if rels:
+            fcntl.ioctl(self.fd, UI_SET_EVBIT, EV_REL)
+            for r in rels:
+                fcntl.ioctl(self.fd, UI_SET_RELBIT, r)
+        setup = struct.pack("HHHH80sI", 0x03, 0x1209, 0x4d44, 1, name.encode(), 0)
+        fcntl.ioctl(self.fd, UI_DEV_SETUP, setup)
+        fcntl.ioctl(self.fd, UI_DEV_CREATE)
+
+    def send(self, etype, code, value):
+        os.write(self.fd, EVENT.pack(0, 0, etype, code, value))
+
+    def sync(self):
+        self.send(EV_SYN, 0, 0)
+
+    def close(self):
+        try:
+            fcntl.ioctl(self.fd, UI_DEV_DESTROY)
+        finally:
+            os.close(self.fd)
+
+
+def absinfo(fd, code):
+    buf = bytearray(24)
+    fcntl.ioctl(fd, 0x80184540 + code, buf)
+    value, lo, hi, _, flat, _ = struct.unpack("iiiiii", bytes(buf))
+    return lo, hi
+
+
+class Pad:
+    def __init__(self):
+        path = find_pad()
+        if not path:
+            sys.exit("mdeck-desktop-pad: no built-in pad")
+        self.fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        try:
+            fcntl.ioctl(self.fd, EVIOCGRAB, 1)
+        except OSError as e:
+            sys.exit("mdeck-desktop-pad: cannot grab %s (is inputplumber stopped?): %s" % (path, e))
+        self.axes = {}
+        for code in (ABS_X, ABS_Y, ABS_RX, ABS_RY):
+            try:
+                self.axes[code] = absinfo(self.fd, code)
+            except OSError:
+                pass
+        self.stick = {code: 0.0 for code in self.axes}
+
+    def events(self):
+        try:
+            data = os.read(self.fd, EVENT.size * 64)
+        except BlockingIOError:
+            return
+        for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
+            _, _, etype, code, value = EVENT.unpack_from(data, off)
+            if etype == EV_ABS and code in self.axes:
+                lo, hi = self.axes[code]
+                mid = (lo + hi) / 2.0
+                self.stick[code] = max(-1.0, min(1.0, (value - mid) / ((hi - lo) / 2.0)))
+            elif etype == EV_KEY:
+                yield code, value
+
+
+def shaped(v):
+    mag = abs(v)
+    if mag < DEADZONE:
+        return 0.0
+    mag = (mag - DEADZONE) / (1 - DEADZONE)
+    return (mag ** 2) * (1 if v > 0 else -1)
+
+
+class Desktop:
+    def __init__(self):
+        self.pad = Pad()
+        allkeys = list(range(1, 249)) + [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE]
+        self.mouse = Uinput("MicroDeck Desktop Mouse", keys=(BTN_LEFT, BTN_RIGHT, BTN_MIDDLE), rels=(REL_X, REL_Y, REL_WHEEL, REL_HWHEEL))
+        self.kbd = Uinput("MicroDeck Desktop Keyboard", keys=range(1, 249))
+        self.down = set()
+        self.keys_mode = False
+        self.dpad_held = {"up": 0.0, "down": 0.0, "left": 0.0, "right": 0.0}
+        self.carry = [0.0, 0.0, 0.0, 0.0]
+        self.start_down = None
+        self.osk = None
+        self.running = True
+
+    # keyboard helpers
+    def tap(self, *codes):
+        for c in codes:
+            self.kbd.send(EV_KEY, c, 1)
+        for c in reversed(codes):
+            self.kbd.send(EV_KEY, c, 0)
+        self.kbd.sync()
+
+    def click(self, code, value):
+        self.mouse.send(EV_KEY, code, value)
+        self.mouse.sync()
+
+    # on-screen keyboard: a separate Xlib process that draws the keys; it reads navigation words on stdin and prints "key <code>" lines
+    def toggle_osk(self):
+        if self.osk and self.osk.poll() is None:
+            self.osk.terminate()
+            self.osk = None
+            return
+        self.osk = subprocess.Popen(["/usr/local/bin/mdeck-osk"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+
+    def osk_active(self):
+        return self.osk is not None and self.osk.poll() is None
+
+    def osk_send(self, word):
+        try:
+            self.osk.stdin.write((word + "\n").encode())
+        except (BrokenPipeError, OSError):
+            self.osk = None
+
+    def osk_read(self):
+        if not self.osk_active():
+            return
+        r, _, _ = select.select([self.osk.stdout], [], [], 0)
+        if r:
+            for line in os.read(self.osk.stdout.fileno(), 256).decode(errors="ignore").splitlines():
+                parts = line.split()
+                if len(parts) >= 2 and parts[0] == "key":
+                    codes = [int(p) for p in parts[1:]]
+                    self.tap(*codes)
+
+    def press(self, name, value):
+        if name == "start":
+            if value:
+                self.start_down = time.monotonic()
+            else:
+                held = time.monotonic() - (self.start_down or time.monotonic())
+                self.start_down = None
+                if held < 2.0:
+                    self.tap(KEY_MENU)
+                    self.keys_mode = True
+            return
+        if self.osk_active():
+            if value and name in ("up", "down", "left", "right", "south", "east", "tl", "tr"):
+                self.osk_send({"south": "press", "east": "close", "tl": "shift", "tr": "backspace"}.get(name, name))
+            elif value and name == "north":
+                self.toggle_osk()
+            return
+        if name in self.dpad_held:
+            if self.keys_mode:
+                if value:
+                    self.tap({"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT}[name])
+            else:
+                self.dpad_held[name] = time.monotonic() if value else 0.0
+            return
+        if name == "south":
+            if self.keys_mode:
+                if value:
+                    self.tap(KEY_ENTER)
+                    self.keys_mode = False
+            else:
+                self.click(BTN_LEFT, value)
+        elif name == "east":
+            if self.keys_mode:
+                if value:
+                    self.tap(KEY_ESC)
+                    self.keys_mode = False
+            else:
+                self.click(BTN_RIGHT, value)
+        elif name == "west":
+            self.click(BTN_MIDDLE, value)
+        elif name == "north":
+            if value:
+                self.toggle_osk()
+        elif name == "tl":
+            if value:
+                self.tap(KEY_ESC)
+        elif name == "tr":
+            if value:
+                self.tap(KEY_ENTER)
+        elif name == "tr2":
+            if value:
+                self.tap(KEY_BACKSPACE)
+        elif name == "tl2":
+            self.scroll_mode = bool(value)
+        elif name == "select":
+            if value:
+                self.keys_mode = not self.keys_mode
+        elif name == "mode":
+            if value:
+                self.tap(KEY_SCROLLLOCK)
+                self.keys_mode = True
+        elif name == "thumbl":
+            if value:
+                self.tap(KEY_LEFTCTRL, KEY_C)
+        elif name == "thumbr":
+            if value:
+                self.tap(KEY_LEFTCTRL, KEY_V)
+
+    scroll_mode = False
+
+    def motion(self, dt):
+        now = time.monotonic()
+        # pointer: d-pad (ramps up while held) and left stick
+        dx = dy = 0.0
+        scroll_y = scroll_x = 0.0
+        pad = self.pad
+        for name, (ax, sign) in {"left": ("x", -1), "right": ("x", 1), "up": ("y", -1), "down": ("y", 1)}.items():
+            since = self.dpad_held[name]
+            if not since:
+                continue
+            speed = POINTER_MIN + (POINTER_MAX - POINTER_MIN) * min(1.0, (now - since) / RAMP)
+            if self.scroll_mode:
+                if ax == "y":
+                    scroll_y += sign * SCROLL_TICKS * 0.5
+                else:
+                    scroll_x += sign * SCROLL_TICKS * 0.5
+            elif ax == "x":
+                dx += sign * speed
+            else:
+                dy += sign * speed
+        lx, ly = shaped(pad.stick.get(ABS_X, 0.0)), shaped(pad.stick.get(ABS_Y, 0.0))
+        dx += lx * POINTER_MAX
+        dy += ly * POINTER_MAX
+        scroll_y += -shaped(pad.stick.get(ABS_RY, 0.0)) * SCROLL_TICKS
+        scroll_x += shaped(pad.stick.get(ABS_RX, 0.0)) * SCROLL_TICKS
+        if self.osk_active() or self.keys_mode:
+            dx = dy = 0.0
+        for i, v in enumerate((dx, dy, scroll_y, scroll_x)):
+            self.carry[i] += v * dt
+        out = [int(c) for c in self.carry]
+        for i, o in enumerate(out):
+            self.carry[i] -= o
+        if out[0]:
+            self.mouse.send(EV_REL, REL_X, out[0])
+        if out[1]:
+            self.mouse.send(EV_REL, REL_Y, out[1])
+        if out[2]:
+            self.mouse.send(EV_REL, REL_WHEEL, -out[2])
+        if out[3]:
+            self.mouse.send(EV_REL, REL_HWHEEL, out[3])
+        if any(out):
+            self.mouse.sync()
+
+    def run(self):
+        names = {v: k for k, v in BTN.items()}
+        last = time.monotonic()
+        while self.running:
+            r, _, _ = select.select([self.pad.fd], [], [], 1 / 60.0)
+            now = time.monotonic()
+            if r:
+                for code, value in self.pad.events():
+                    if value in (0, 1) and code in names:
+                        self.press(names[code], value)
+            self.motion(now - last)
+            last = now
+            self.osk_read()
+            if self.start_down and now - self.start_down >= 2.0:
+                self.start_down = None
+                subprocess.Popen(["/usr/local/bin/steamos-session-select", "gamescope"])
+        self.close()
+
+    def close(self):
+        if self.osk_active():
+            self.osk.terminate()
+        try:
+            fcntl.ioctl(self.pad.fd, EVIOCGRAB, 0)
+        except OSError:
+            pass
+        self.mouse.close()
+        self.kbd.close()
+
+
+def main():
+    desk = Desktop()
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, lambda *_: setattr(desk, "running", False))
+    desk.run()
+
+
+if __name__ == "__main__":
+    main()

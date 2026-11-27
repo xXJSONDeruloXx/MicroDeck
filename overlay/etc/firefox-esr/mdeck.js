@@ -1,0 +1,10 @@
+// MicroDeck desktop mode: 1 GB of RAM and a 640x480 screen. Two content processes, small caches, idle tabs are unloaded.
+pref("dom.ipc.processCount", 2);
+pref("browser.tabs.unloadOnLowMemory", true);
+pref("browser.cache.memory.capacity", 32768);
+pref("browser.sessionhistory.max_total_viewers", 1);
+pref("browser.sessionstore.max_tabs_undo", 1);
+pref("browser.shell.checkDefaultBrowser", false);
+pref("browser.aboutwelcome.enabled", false);
+pref("datareporting.policy.dataSubmissionEnabled", false);
+pref("toolkit.telemetry.enabled", false);
