@@ -10,8 +10,9 @@ Started as a proof of concept on muOS ([steam-rg40xx](https://github.com/xXJSOND
 client running in a chroot on the vendor 4.9 kernel). This project replaces muOS with mainline Linux, which
 brings KMS, Panfrost, PipeWire, user namespaces and SysV IPC.
 
-> **Status: early but working.** The image boots into Steam's Big Picture, and Windows games launch from
-> it through Proton ARM64 + FEX. Games come to the front, the Steam button opens Steam's menu over them,
+> **Status: early but working.** The image boots into Steam's Big Picture, Windows games launch from
+> it through Proton ARM64 + FEX, Linux x86 games through FEX, and OS updates install from Steam itself
+> (Settings > System > Check For Updates, with automatic rollback). Games come to the front, the Steam button opens Steam's menu over them,
 > and B returns, as on SteamOS. Expect it to be slow: Steam's UI is Chromium on four A53 cores; Direct3D 9
 > renders on the Mali through WineD3D (Geometry Wars: ~8 FPS), Direct3D 10/11 on the CPU.
 
