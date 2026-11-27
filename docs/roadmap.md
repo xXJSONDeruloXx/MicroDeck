@@ -60,7 +60,7 @@ notes (docs/design/*.md, docs/boot-time.md) have ideas, ranked by value over eff
 - [ ] Pre-seed or background-fetch Steam and Proton: ship them on the data partition or fetch them in a `Nice=19`,
       idle-I/O unit with chunked, hash-verified, resumable downloads (their updater pattern), removing the 1.1 GB
       first-start wait. Note (2026-11-26): the slow part is the handheld's Wi-Fi (~1 MB/s), not the source: Valve's client cannot be shipped,
-      and shipping Proton would save only about 7 of 58 minutes, so fix the Wi-Fi speed first (section 2.5 below). M
+      and shipping Proton would save only about 7 of 58 minutes, so fix the Wi-Fi speed first (see the Wi-Fi speed item). M
 - [ ] Mesa trimming: nibOS builds Panfrost-only with no LLVM (libgallium 21 MB instead of 54 MB plus 171 MB libLLVM)
       and carries two Panfrost patches (write-combined index scan, keep BOs mapped). The G31 uses Panfrost too, but we
       rely on llvmpipe for the DXVK CPU path, so test a Panfrost-only build against the cost of losing that. M
