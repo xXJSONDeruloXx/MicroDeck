@@ -65,6 +65,11 @@ xprop -root MDECK_SCALE_WINDOW | grep -q "$(printf '%d' "$game")" || { cat /tmp/
 [ "$(cat /tmp/scaler.calls 2>/dev/null | wc -l)" = 1 ] || fail "the scaler was not started exactly once"
 [ ! -s /tmp/fit.calls ] || fail "the screen was resized although the scaler is in use"
 echo "ok   a window smaller than the screen is named for the scaler (no screen change)"
+# a scaler that died is started again (after a short pause so a broken one cannot spin)
+pkill -f /tmp/fake-scaler || true
+sleep 9
+[ "$(cat /tmp/scaler.calls 2>/dev/null | wc -l)" = 2 ] || { cat /tmp/focus2.log; fail "a scaler that died was not started again"; }
+echo "ok   a scaler that died is started again"
 xdotool windowsize "$game" 640 480
 sleep 3
 xprop -root MDECK_SCALE_WINDOW | grep -q "not found" || fail "the scaler window was not cleared for a window the size of the screen"

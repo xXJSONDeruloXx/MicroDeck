@@ -233,15 +233,17 @@ static void sync_overlays(void) {
   }
 }
 
+// Also cleans up a start() that got only part of the way (the overlay window held, no context yet).
 static void stop(void) {
-  if (!active) return;
+  if (!active && !cow) return;
   for (int i = 0; i < MAXL; i++) layer_stop(&overlays[i]);
   layer_stop(&game);
-  glXMakeCurrent(d, None, NULL);
+  if (ctx || gwin) glXMakeCurrent(d, None, NULL);
   if (gwin) glXDestroyWindow(d, gwin);
   if (ctx) glXDestroyContext(d, ctx);
   gwin = 0; ctx = NULL;
-  XCompositeReleaseOverlayWindow(d, root);
+  prog = 0; vbo = 0;   // objects of the context that is gone: the next one has to build its own
+  if (cow) XCompositeReleaseOverlayWindow(d, root);
   cow = 0; active = 0;
   XFlush(d);
   if (verbose) fprintf(stderr, "mdeck-scale: off\n");
@@ -250,9 +252,14 @@ static void stop(void) {
 static void start(Window target) {
   if (active && game.w == target) return;
   stop();
+  XWindowAttributes ta, ra;
+  // nothing to show yet (the window is not mapped, or gone): do not cover the screen, the main loop tries again
+  if (!XGetWindowAttributes(d, target, &ta) || ta.map_state != IsViewable) return;
+  if (XGetWindowAttributes(d, root, &ra)) { sw = ra.width; sh = ra.height; }   // Xlib's DisplayWidth is cached from connect time
   cow = XCompositeGetOverlayWindow(d, root);
   XserverRegion none = XFixesCreateRegion(d, NULL, 0);
   XFixesSetWindowShapeRegion(d, cow, ShapeInput, 0, 0, none);   // clicks and touches go through to the windows below
+  XFixesSetWindowShapeRegion(d, cow, ShapeBounding, 0, 0, none);   // and it stays invisible until the first frame is drawn
   XFixesDestroyRegion(d, none);
   XWindowAttributes wa;
   XGetWindowAttributes(d, cow, &wa);
@@ -267,17 +274,19 @@ static void start(Window target) {
     if ((VisualID)id == vis && (type & GLX_WINDOW_BIT) && dbl) { win_cfg = cfgs[i]; found = 1; }
   }
   if (cfgs) XFree(cfgs);
-  if (!found) { fprintf(stderr, "mdeck-scale: no double-buffered GLX config for the overlay window\n"); XCompositeReleaseOverlayWindow(d, root); cow = 0; return; }
+  if (!found) { fprintf(stderr, "mdeck-scale: no double-buffered GLX config for the overlay window\n"); stop(); return; }
   ctx = glXCreateNewContext(d, win_cfg, GLX_RGBA_TYPE, NULL, True);
   gwin = glXCreateWindow(d, win_cfg, cow, NULL);
   if (!ctx || !gwin || !glXMakeCurrent(d, gwin, ctx)) { fprintf(stderr, "mdeck-scale: cannot make the GL context current\n"); stop(); return; }
-  if (!prog) gl_init();
+  gl_init();
   if (swap_interval) swap_interval(d, gwin, 1);
   active = 1;
   layer_start(&game, target);
   sync_overlays();
   if (verbose) fprintf(stderr, "mdeck-scale: on for 0x%lx (%dx%d on %dx%d)\n", target, game.width, game.height, sw, sh);
   paint();
+  XFixesSetWindowShapeRegion(d, cow, ShapeBounding, 0, 0, None);   // the first frame is there: show the overlay window
+  XFlush(d);
 }
 
 int main(int argc, char **argv) {
@@ -303,11 +312,14 @@ int main(int argc, char **argv) {
   a_filter = XInternAtom(d, "GAMESCOPE_NEW_SCALING_FILTER", False);
   a_scaler = XInternAtom(d, "GAMESCOPE_NEW_SCALING_SCALER", False);
   XSelectInput(d, root, PropertyChangeMask | SubstructureNotifyMask);
-  int dirty = 0;
+  int dirty = 0, resync = 0, unbound = 0, failed = 0;
   for (;;) {
     Window want = (Window)cardinal(root, a_target);
-    if (want && (!active || game.w != want)) start(want);
-    else if (!want && active) {
+    if (want && (!active || game.w != want)) {
+      start(want);
+      // a window that never becomes drawable: give up (mdeck-focus starts this again when it sees the scaler is gone)
+      if (active) failed = 0; else if (++failed > 20) return 0;
+    } else if (!want && active) {
       stop();
       // mdeck-focus starts this process only while a game needs scaling; nothing to scale any more: give the memory back
       // (unless the window was named again while stopping)
@@ -322,22 +334,40 @@ int main(int argc, char **argv) {
         XDamageNotifyEvent *de = (XDamageNotifyEvent *)&e;
         XDamageSubtract(d, de->damage, None, None);
         dirty = 1;
-      } else if (e.type == ConfigureNotify || e.type == MapNotify || e.type == UnmapNotify) {
+      } else if (active && (e.type == ConfigureNotify || e.type == MapNotify || e.type == UnmapNotify)) {
+        // the backing pixmap changes with a window's size and mapping, not with its position
         Window w = e.type == ConfigureNotify ? e.xconfigure.window : e.type == MapNotify ? e.xmap.window : e.xunmap.window;
-        if (active && w == game.w) layer_bind(&game);
-        for (int i = 0; i < MAXL; i++) if (overlays[i].w == w) layer_bind(&overlays[i]);
-        if (active) sync_overlays();
+        int resized = e.type != ConfigureNotify;
+        if (e.type == ConfigureNotify) {
+          if (w == game.w) resized = e.xconfigure.width != game.width || e.xconfigure.height != game.height;
+          for (int i = 0; i < MAXL; i++) if (overlays[i].w == w) resized = resized || e.xconfigure.width != overlays[i].width || e.xconfigure.height != overlays[i].height;
+        }
+        if (resized) {
+          if (w == game.w) layer_bind(&game);
+          for (int i = 0; i < MAXL; i++) if (overlays[i].w == w) layer_bind(&overlays[i]);
+        }
+        resync = 1;
         dirty = 1;
       } else if (e.type == PropertyNotify && active &&
                  (e.xproperty.window == root || e.xproperty.atom == a_overlay || e.xproperty.atom == a_notification)) {
-        sync_overlays();
+        resync = 1;
         dirty = 1;   // also when Steam changes the scaling filter or mode
       }
     }
+    if (active && resync) { sync_overlays(); resync = 0; }
     if (active && dirty) { paint(); dirty = 0; }
     struct pollfd pf = {ConnectionNumber(d), POLLIN, 0};
-    // idle (nothing is scaled) it only wakes for X events; scaling, a slow pass also finds overlay windows that appeared
-    poll(&pf, 1, active ? 1000 : -1);
-    if (active && !XPending(d)) { sync_overlays(); dirty = 1; }
+    // idle (nothing is scaled) it only wakes for X events; scaling, a slow pass also finds overlay windows that appeared and retries
+    // a game window that was not drawable; naming a window that is not mapped yet is retried every half second
+    poll(&pf, 1, active ? 1000 : want ? 500 : -1);
+    if (active && !XPending(d)) {
+      if (!game.gp) {
+        layer_bind(&game);
+        unbound = game.gp ? 0 : unbound + 1;
+        if (unbound >= 3) { stop(); return 0; }   // the window is gone or stays unmapped: show the screen again
+      }
+      sync_overlays();
+      dirty = 1;
+    }
   }
 }

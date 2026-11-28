@@ -12,6 +12,7 @@
 #include <X11/extensions/XRes.h>
 #include <dirent.h>
 #include <sched.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +36,9 @@ static Window fitted;           // the game window the screen is currently scale
 static int fitted_w, fitted_h;
 
 static int x_error(Display *dpy, XErrorEvent *e) { (void)dpy; (void)e; return 0; }
+
+static volatile sig_atomic_t quit;
+static void on_term(int sig) { (void)sig; quit = 1; }
 
 static long *get_cardinals(Window w, Atom prop, Atom type, unsigned long *n) {
   Atom t; int f; unsigned long after; unsigned char *data = NULL;
@@ -162,8 +166,14 @@ static const char *scale_cmd = "/usr/local/bin/mdeck-scale";
 static Atom a_scale_win;
 static pid_t scaler_pid;
 
+static long scaler_started;
+
+// Called on every pass while something is being scaled, so a scaler that died (or ended while the window was being named again) comes back.
 static void run_scaler(void) {
-  if (scaler_pid > 0 && kill(scaler_pid, 0) == 0) return;
+  // waitpid also reaps an exited child, and unlike kill(pid, 0) it cannot be fooled by a reused pid
+  if (scaler_pid > 0 && waitpid(scaler_pid, NULL, WNOHANG) == 0) return;
+  if (scaler_started && now_ms() - scaler_started < 5000) return;   // it just ended: no tight respawn loop if the GL stack is broken
+  scaler_started = now_ms();
   scaler_pid = fork();
   if (scaler_pid == 0) {
     if (verbose) execl(scale_cmd, scale_cmd, "-v", (char *)NULL);
@@ -212,6 +222,7 @@ static void fit_screen(struct win *pick) {
   int applied = w ? (fitted == pick->w && fitted_w == w && fitted_h == h) : !fitted;
   if (applied) {
     pending = 0;
+    if (use_scaler && w) run_scaler();
   } else if (now_ms() - want_since < wait) {
     pending = 1;                           // not yet: the main loop comes back
     return;
@@ -248,14 +259,15 @@ static void fit_screen(struct win *pick) {
 // While a game launches or runs, Steam's web helper (the Steam UI) is kept to one core: during a launch it used 150-240 % CPU of the 400 %
 // the container setup and Wine need, and a launch took 117 and 110 s with it pinned against 128 and 131 s without. It gets every core
 // back while Steam's menu is open (the UI has to be quick then) and when no game is running. MDECK_UI_PIN=0 turns this off.
-static int pin_enabled = 1, pin_state = -1, ncpu = 4;
+static int pin_enabled = 1, pin_state = -1, pin_cpu;
+static cpu_set_t all_cpus;     // the CPUs this daemon may use: what a released helper gets back
 static long pin_checked;
 
 static void set_web_affinity(int pin) {
   cpu_set_t set;
   CPU_ZERO(&set);
-  if (pin) CPU_SET(ncpu - 1, &set);
-  else for (int i = 0; i < ncpu && i < CPU_SETSIZE; i++) CPU_SET(i, &set);
+  if (pin) CPU_SET(pin_cpu, &set);
+  else set = all_cpus;
   DIR *proc = opendir("/proc");
   if (!proc) return;
   struct dirent *e;
@@ -380,10 +392,12 @@ int main(int argc, char **argv) {
   if (getenv("MDECK_FIT")) fit_cmd = getenv("MDECK_FIT");
   if (getenv("MDECK_SCALE_CMD")) scale_cmd = getenv("MDECK_SCALE_CMD");
   use_scaler = !getenv("MDECK_FIT") && access(scale_cmd, X_OK) == 0;
-  signal(SIGCHLD, SIG_IGN);
   pin_enabled = !getenv("MDECK_UI_PIN") || strcmp(getenv("MDECK_UI_PIN"), "0");
-  ncpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
-  if (ncpu < 2) pin_enabled = 0;
+  CPU_ZERO(&all_cpus);
+  if (sched_getaffinity(0, sizeof all_cpus, &all_cpus) != 0 || CPU_COUNT(&all_cpus) < 2) pin_enabled = 0;
+  for (int i = 0; i < CPU_SETSIZE; i++) if (CPU_ISSET(i, &all_cpus)) pin_cpu = i;   // the highest CPU we may use
+  signal(SIGTERM, on_term);
+  signal(SIGINT, on_term);
   {  // a crashed run may have left the screen scaled; Xlib reads the screen size once, when it connects, so reset before that
     char cmd[256];
     snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
@@ -405,7 +419,8 @@ int main(int argc, char **argv) {
   XSelectInput(d, root, PropertyChangeMask | SubstructureNotifyMask);
   sync_focus();
   int fd = ConnectionNumber(d);
-  for (;;) {
+  long next_pass = now_ms() + 2000;
+  while (!quit) {
     int relevant = 0;
     while (XPending(d)) {
       XEvent ev;
@@ -418,10 +433,22 @@ int main(int argc, char **argv) {
         relevant = 1;
       }
     }
-    if (relevant) sync_focus();
+    // The periodic pass picks up windows whose size or class changed without a root-level event, and finishes the waits of fit_screen. It is
+    // driven by a deadline, not by select timing out: a steady stream of irrelevant events (properties that change all the time) would
+    // otherwise keep select from ever returning 0 and the pass would never come.
+    if (relevant || now_ms() >= next_pass) {
+      sync_focus();
+      next_pass = now_ms() + (pending ? 100 : 2000);
+    }
+    long wait = next_pass - now_ms();
+    if (wait < 0) wait = 0;
     fd_set fds; FD_ZERO(&fds); FD_SET(fd, &fds);
-    struct timeval tv = {pending ? 0 : 2, pending ? 100000 : 0};
-    // The periodic pass picks up windows whose size or class changed without a root-level event.
-    if (select(fd + 1, &fds, NULL, NULL, &tv) == 0) sync_focus();
+    struct timeval tv = {wait / 1000, (wait % 1000) * 1000};
+    select(fd + 1, &fds, NULL, NULL, &tv);
   }
+  // asked to end: the web helper gets its cores back and no window stays named for the scaler
+  if (pin_state == 1) set_web_affinity(0);
+  XDeleteProperty(d, root, a_scale_win);
+  XCloseDisplay(d);
+  return 0;
 }
