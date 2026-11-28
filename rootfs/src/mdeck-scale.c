@@ -32,7 +32,7 @@ struct layer {
 
 static Display *d;
 static Window root, cow;
-static Atom a_target, a_overlay, a_client_list, a_filter, a_scaler;
+static Atom a_target, a_overlay, a_notification, a_client_list, a_filter, a_scaler;
 static int sw, sh, verbose, damage_base;
 static GLXContext ctx;
 static GLXWindow gwin;
@@ -142,7 +142,7 @@ static void layer_start(struct layer *l, Window w) {
   l->w = w;
   XCompositeRedirectWindow(d, w, CompositeRedirectManual);
   l->dmg = XDamageCreate(d, w, XDamageReportNonEmpty);
-  XSelectInput(d, w, StructureNotifyMask);
+  XSelectInput(d, w, PropertyChangeMask | StructureNotifyMask);
   layer_bind(l);
 }
 
@@ -152,7 +152,7 @@ static void layer_stop(struct layer *l) {
   if (l->tex) glDeleteTextures(1, &l->tex);
   if (l->dmg) XDamageDestroy(d, l->dmg);
   XCompositeUnredirectWindow(d, l->w, CompositeRedirectManual);
-  XSelectInput(d, l->w, 0);
+  XSelectInput(d, l->w, PropertyChangeMask | StructureNotifyMask);
   memset(l, 0, sizeof *l);
 }
 
@@ -213,7 +213,9 @@ static void sync_overlays(void) {
   if (XGetWindowProperty(d, root, a_client_list, 0, 4096, False, XA_WINDOW, &t, &f, &n, &after, &data) != Success || !data || f != 32) { if (data) XFree(data); return; }
   Window *kids = (Window *)data;
   for (unsigned long i = 0; i < n; i++) {
-    if (kids[i] == cow || kids[i] == game.w || !cardinal(kids[i], a_overlay)) continue;
+    XSelectInput(d, kids[i], PropertyChangeMask | StructureNotifyMask);   // so a window turning into the overlay or a toast is seen at once
+    // the in-game menu, and Steam's notification toasts (achievements, volume), are drawn over the game as gamescope does
+    if (kids[i] == cow || kids[i] == game.w || (!cardinal(kids[i], a_overlay) && !cardinal(kids[i], a_notification))) continue;
     XWindowAttributes wa;
     if (!XGetWindowAttributes(d, kids[i], &wa) || wa.map_state != IsViewable || wa.class == InputOnly) continue;
     for (int j = 0; j < MAXL; j++) if (!seen[j]) { seen[j] = kids[i]; break; }
@@ -296,6 +298,7 @@ int main(int argc, char **argv) {
   if (!bind_tex || !release_tex) { fprintf(stderr, "mdeck-scale: GLX_EXT_texture_from_pixmap is missing\n"); return 1; }
   a_target = XInternAtom(d, "MDECK_SCALE_WINDOW", False);
   a_overlay = XInternAtom(d, "STEAM_OVERLAY", False);
+  a_notification = XInternAtom(d, "STEAM_NOTIFICATION", False);
   a_client_list = XInternAtom(d, "_NET_CLIENT_LIST", False);
   a_filter = XInternAtom(d, "GAMESCOPE_NEW_SCALING_FILTER", False);
   a_scaler = XInternAtom(d, "GAMESCOPE_NEW_SCALING_SCALER", False);
@@ -325,7 +328,8 @@ int main(int argc, char **argv) {
         for (int i = 0; i < MAXL; i++) if (overlays[i].w == w) layer_bind(&overlays[i]);
         if (active) sync_overlays();
         dirty = 1;
-      } else if (e.type == PropertyNotify && e.xproperty.window == root && active) {
+      } else if (e.type == PropertyNotify && active &&
+                 (e.xproperty.window == root || e.xproperty.atom == a_overlay || e.xproperty.atom == a_notification)) {
         sync_overlays();
         dirty = 1;   // also when Steam changes the scaling filter or mode
       }
