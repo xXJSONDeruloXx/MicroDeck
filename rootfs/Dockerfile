@@ -68,7 +68,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends bluez libspa-0.
 
 
 # Desktop mode (Steam's "Switch to Desktop"): openbox is already in the image; a panel, a browser, documents, a text editor, files, a terminal.
-# libxft-dev builds the on-screen keyboard (mdeck-osk). About 430 MB installed, 275 MB of it Firefox.
+# libxft-dev builds the on-screen keyboard (mdeck-osk); the Composite, Damage, Fixes and GL headers build mdeck-scale. About 430 MB installed, 275 MB of it Firefox.
 RUN apt-get update && apt-get install -y --no-install-recommends firefox-esr abiword gnumeric mousepad pcmanfm xterm tint2 \
-      fonts-dejavu-core libxft-dev \
+      fonts-dejavu-core libxft-dev libgl-dev libxcomposite-dev libxdamage-dev libxfixes-dev \
  && apt-get clean && rm -rf /var/lib/apt/lists/*

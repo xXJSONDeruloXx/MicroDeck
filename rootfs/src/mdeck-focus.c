@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <signal.h>
+#include <sys/types.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -149,8 +151,39 @@ static long now_ms(void) {
   return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
 }
 
-static void apply_fit(int w, int h) {
+// With mdeck-scale installed the screen is never resized: the game window is named in MDECK_SCALE_WINDOW and mdeck-scale, started here
+// only while there is something to scale (it takes about 45 MB), draws it scaled on the composite overlay. Without it (or with
+// MDECK_FIT set, as the tests do) the whole X screen is resized with mdeck-fit as before.
+static int use_scaler;
+static const char *scale_cmd = "/usr/local/bin/mdeck-scale";
+static Atom a_scale_win;
+static pid_t scaler_pid;
+
+static void run_scaler(void) {
+  if (scaler_pid > 0 && kill(scaler_pid, 0) == 0) return;
+  scaler_pid = fork();
+  if (scaler_pid == 0) {
+    if (verbose) execl(scale_cmd, scale_cmd, "-v", (char *)NULL);
+    else execl(scale_cmd, scale_cmd, (char *)NULL);
+    _exit(1);
+  }
+}
+
+static void apply_fit(int w, int h, Window win) {
   char cmd[256];
+  if (use_scaler) {
+    if (w) {
+      long v = (long)win;
+      XChangeProperty(d, root, a_scale_win, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&v, 1);
+      XFlush(d);
+      run_scaler();
+    } else {
+      XDeleteProperty(d, root, a_scale_win);
+      XFlush(d);
+    }
+    if (verbose) fprintf(stderr, "mdeck-focus: scaler %s\n", w ? "on" : "off");
+    return;
+  }
   if (w) snprintf(cmd, sizeof cmd, "%s %d %d", fit_cmd, w, h);
   else snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
   if (verbose) fprintf(stderr, "mdeck-focus: %s\n", cmd);
@@ -162,7 +195,10 @@ static void fit_screen(struct win *pick) {
   int w = 0, h = 0;                       // the size the screen should have: 0 x 0 is the panel's own
   int steam = pick && pick->appid == STEAM_APPID;
   if (pick && !steam && XGetWindowAttributes(d, pick->w, &wa)) {
-    if (wa.width > base_w || wa.height > base_h) { w = wa.width; h = wa.height; }
+    int bigger = wa.width > base_w || wa.height > base_h;
+    // magnifying is only safe without a screen change (see above); tiny windows (dialogs, splash screens) are left alone
+    int smaller = use_scaler && wa.width < base_w && wa.height < base_h && wa.width >= 240 && wa.height >= 160;
+    if (bigger || smaller) { w = wa.width; h = wa.height; }
   }
   Window win = w ? pick->w : 0;
   if (w != want_w || h != want_h || win != want_win) {
@@ -178,20 +214,24 @@ static void fit_screen(struct win *pick) {
   } else {
     pending = 0;
     if (w) {
-      // undecorated and at the origin, so the picture is the window and nothing else
-      Atom motif = XInternAtom(d, "_MOTIF_WM_HINTS", False);
-      long hints[5] = {2, 0, 0, 0, 0};
-      XChangeProperty(d, pick->w, motif, motif, 32, PropModeReplace, (unsigned char *)hints, 5);
-      XMoveWindow(d, pick->w, 0, 0);
-      XFlush(d);
-      if (!(fitted && fitted_w == w && fitted_h == h)) apply_fit(w, h);   // a game's new window of the same size needs no modeset
+      if (!use_scaler) {
+        // undecorated and at the origin, so the picture is the window and nothing else. (mdeck-scale draws the window's own pixmap, which
+        // has no frame and does not depend on where the window is; and games react to being moved: Sonic Mania shrinks its window by a
+        // third when it is moved, so the window is left alone.)
+        Atom motif = XInternAtom(d, "_MOTIF_WM_HINTS", False);
+        long hints[5] = {2, 0, 0, 0, 0};
+        XChangeProperty(d, pick->w, motif, motif, 32, PropModeReplace, (unsigned char *)hints, 5);
+        XMoveWindow(d, pick->w, 0, 0);
+        XFlush(d);
+      }
+      if (use_scaler || !(fitted && fitted_w == w && fitted_h == h)) apply_fit(w, h, pick->w);   // a new window of the same size needs no modeset
       fitted = pick->w; fitted_w = w; fitted_h = h;
     } else {
-      apply_fit(0, 0);
+      apply_fit(0, 0, 0);
       fitted = 0;
     }
   }
-  if (w && fitted == pick->w) {
+  if (w && fitted == pick->w && !use_scaler) {
     // Games centre their window on the screen they saw (SDL does it after it maps): put it back at the origin whenever it drifts
     int rx = 0, ry = 0; Window child;
     if (XTranslateCoordinates(d, pick->w, root, 0, 0, &rx, &ry, &child) && (rx != 0 || ry != 0)) {
@@ -269,6 +309,9 @@ static void sync_focus(void) {
 int main(int argc, char **argv) {
   verbose = argc > 1 && !strcmp(argv[1], "-v");
   if (getenv("MDECK_FIT")) fit_cmd = getenv("MDECK_FIT");
+  if (getenv("MDECK_SCALE_CMD")) scale_cmd = getenv("MDECK_SCALE_CMD");
+  use_scaler = !getenv("MDECK_FIT") && access(scale_cmd, X_OK) == 0;
+  signal(SIGCHLD, SIG_IGN);
   {  // a crashed run may have left the screen scaled; Xlib reads the screen size once, when it connects, so reset before that
     char cmd[256];
     snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
@@ -277,6 +320,8 @@ int main(int argc, char **argv) {
   if (!(d = XOpenDisplay(NULL))) { fprintf(stderr, "mdeck-focus: cannot open display\n"); return 1; }
   XSetErrorHandler(x_error);
   root = DefaultRootWindow(d);
+  a_scale_win = XInternAtom(d, "MDECK_SCALE_WINDOW", False);
+  XDeleteProperty(d, root, a_scale_win);   // a crashed run may have left a window named
   base_w = DisplayWidth(d, DefaultScreen(d)); base_h = DisplayHeight(d, DefaultScreen(d));
 #define A(v, s) v = XInternAtom(d, s, False)
   A(a_client_list, "_NET_CLIENT_LIST"); A(a_active, "_NET_ACTIVE_WINDOW"); A(a_steam_game, "STEAM_GAME");

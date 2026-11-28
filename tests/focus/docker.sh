@@ -5,5 +5,5 @@ cd "$(dirname "$0")/../.."
 env MSYS_NO_PATHCONV=1 docker run --rm --platform linux/amd64 -v "$(pwd -W 2>/dev/null || pwd):/w" -w /w debian:trixie bash -c '
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -qq >/dev/null
-  apt-get install -y -qq gcc libc6-dev libx11-dev libxres-dev xvfb openbox x11-utils x11-apps xdotool procps >/dev/null 2>&1
+  apt-get install -y -qq gcc libc6-dev libx11-dev libxres-dev libgl-dev libxcomposite-dev libxdamage-dev libxfixes-dev xvfb openbox x11-utils x11-apps xdotool procps >/dev/null 2>&1
   bash tests/focus/run.sh'

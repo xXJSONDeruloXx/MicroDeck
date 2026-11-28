@@ -19,7 +19,7 @@ jobs:
       - name: focus daemon against a real X server
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gcc libc6-dev libx11-dev libxres-dev xvfb openbox x11-utils x11-apps xdotool procps
+          sudo apt-get install -y -qq gcc libc6-dev libx11-dev libxres-dev libgl-dev libxcomposite-dev libxdamage-dev libxfixes-dev xvfb openbox x11-utils x11-apps xdotool procps
           bash tests/focus/run.sh
   kernel:
     uses: ./.github/workflows/kernel.yml

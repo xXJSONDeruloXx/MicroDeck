@@ -11,6 +11,8 @@ COPY rootfs/src/mdeck-focus.c /usr/local/src/mdeck-focus.c
 RUN gcc -O2 -Wall -o /usr/local/bin/mdeck-focus /usr/local/src/mdeck-focus.c -lX11 -lXRes
 COPY rootfs/src/mdeck-osk.c /usr/local/src/mdeck-osk.c
 RUN gcc -O2 -Wall -o /usr/local/bin/mdeck-osk /usr/local/src/mdeck-osk.c -lX11 $(pkg-config --cflags --libs xft)
+COPY rootfs/src/mdeck-scale.c /usr/local/src/mdeck-scale.c
+RUN gcc -O2 -Wall -o /usr/local/bin/mdeck-scale /usr/local/src/mdeck-scale.c -lX11 -lXcomposite -lXdamage -lXfixes -lGL
 COPY rootfs/src/memload.c /usr/local/src/memload.c
 RUN gcc -O2 -Wall -o /usr/local/bin/memload /usr/local/src/memload.c
 COPY rootfs/src/vk-fake-drm.c /usr/local/src/vk-fake-drm.c
