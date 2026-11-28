@@ -50,6 +50,9 @@ Installed v0.7.x updaters cannot see v0.8.0 or later (the project moved): write 
   keyboard). The Steam button on the panel, or holding Start, returns to Steam. One browser tab at a time fits in 1 GB.
 - **Sleep** is on: a short press of the power button sleeps, a long press powers off, and the next press wakes. If a unit does not wake from
   it, hold the power button 10-15 seconds, then turn sleep off with an empty file named `nosleep` on the `MICRODECK` partition (or `mdeck-sleep off`).
+- **Games fill the screen.** A game window that does not match the panel (a Windows game's small windowed mode, an old game with a big window) is
+  scaled to fit by the GPU, with Steam's menu on top. Steam's own UI runs without its blur effects, which a handheld this size cannot draw
+  quickly (`UI_BLUR=1` in `/etc/steam-session.conf` brings them back).
 - **Slow:** Direct3D 9 runs on the GPU, Direct3D 10/11 on the CPU. See [docs/games.md](docs/games.md) for what runs.
 
 ## More
