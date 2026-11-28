@@ -27,6 +27,8 @@ case "$1" in
     # in the background, so the resume is not held up
     [ -f "$STATE" ] && systemd-run --no-block --quiet --unit=mdeck-sleep-wifi /usr/local/sbin/mdeck-sleep-wifi
     systemctl start inputplumber
+    # a sleep that Steam started leaves its UI on the "going to sleep" video and a running game frozen until Steam is told the system resumed
+    systemd-run --no-block --quiet --unit=mdeck-ui-resume /usr/local/bin/mdeck ui-resume
     touch /run/mdeck-sleep-woke
     ;;
 esac

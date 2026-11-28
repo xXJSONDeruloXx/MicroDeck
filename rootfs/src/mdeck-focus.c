@@ -436,6 +436,7 @@ int main(int argc, char **argv) {
     // The periodic pass picks up windows whose size or class changed without a root-level event, and finishes the waits of fit_screen. It is
     // driven by a deadline, not by select timing out: a steady stream of irrelevant events (properties that change all the time) would
     // otherwise keep select from ever returning 0 and the pass would never come.
+    if (scaler_pid > 0 && waitpid(scaler_pid, NULL, WNOHANG) != 0) scaler_pid = 0;   // reap a scaler that ended, no zombie is left
     if (relevant || now_ms() >= next_pass) {
       sync_focus();
       next_pass = now_ms() + (pending ? 100 : 2000);

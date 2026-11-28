@@ -8,6 +8,7 @@
                                    hold:BTN:MS, wait:MS, stick:L|R:X:Y (-1..1, released after 200 ms)
   mdeck vpad-daemon                  the virtual pad itself (run as root by mdeck-vpad.service)
   mdeck ui-fixes                     keeps small fixes applied inside Steam's UI pages (mdeck-ui-fixes.service)
+  mdeck ui-resume                    after a wake: tell Steam's UI the system resumed from a sleep Steam started (the sleep hook runs it)
 
 The DevTools WebSocket client and CDP evaluation are adapted from DroidDeck's droiddeck-agent.
 """
@@ -218,6 +219,34 @@ def ui_fixes():
         time.sleep(3)
 
 
+# When Steam starts a sleep itself (its idle timer, Power > Sleep) it shows a full-screen "going to sleep" video, freezes the running game, and
+# waits for its client to report the resume before it closes the video and thaws the game. On Steam's own platform that report comes from
+# its system service; here nothing sends it, so the handheld woke up and stayed on the animation, and a running game would have stayed frozen.
+# SuspendResumeStore is the UI's own object for this and InitiateResume() is what the report would call.
+UI_RESUME_JS = """(function(){
+  if (typeof SuspendResumeStore === "undefined") return "no store";
+  if (!SuspendResumeStore.m_bSuspending) return "idle";
+  SuspendResumeStore.InitiateResume();
+  return "resumed";
+})()"""
+
+
+def ui_resume(timeout=45):
+    """Called right after a resume. The UI may need a few seconds to answer after being frozen; nothing to do when Steam did not start the sleep."""
+    end = time.time() + timeout
+    while time.time() < end:
+        try:
+            r = cdp_eval(UI_RESUME_JS, "SharedJSContext", 10)
+        except (OSError, ValueError, SystemExit):
+            time.sleep(2)
+            continue
+        if r in ("resumed", "idle", "no store"):
+            print("mdeck ui-resume: %s" % r)
+            return r
+        time.sleep(2)
+    return None
+
+
 # --- virtual test pad -------------------------------------------------------------------------
 
 EV_SYN, EV_KEY, EV_ABS = 0, 1, 3
@@ -356,6 +385,8 @@ def main(argv):
         vpad_daemon()
     elif cmd == "ui-fixes":
         ui_fixes()
+    elif cmd == "ui-resume":
+        ui_resume()
     else:
         raise SystemExit(__doc__)
 
