@@ -472,3 +472,30 @@ natively with LLVM 19 first, then a cross build with `-Dvulkan-drivers=panfrost 
 X11 only, which is all the session uses), and the cross build needs `panfrost_compile` from a native Panfrost build. A Vulkan loader on a
 Debian arm64 userland finds the ICD (`panfrost_icd.cortex-a53.json`) and loads `libvulkan_panfrost.so` with no unresolved symbols; the
 only complaint is "no valid GPUs", as expected without a Mali. The test on the Mali-G31 itself is `tools/mesa/try-on-device.sh`.
+
+## 2026-11-27: scaling game windows without resizing the screen (mdeck-scale)
+
+- **Symptom:** Sonic Mania in its default windowed mode is a 424x240 window with a title bar floating on the 640x480 panel, and fullscreen
+  changes made the panel flicker. Gamescope would scale the window to fill the panel.
+- **What the old fit did (RandR transform and `--fb` through `mdeck-fit`)** : every change is a modeset that blanks the panel, and Wine sees the
+  display change: with a magnifying transform (the screen made smaller than the panel) Wine reported a smaller monitor and Sonic Mania
+  shrank its own window by the same factor (281x159 from 424x240), after which the fit was undone and redone. Shrinking transforms (windows
+  bigger than the panel) are the same feedback in the other direction. Moving the game window to the origin and removing its title bar
+  (what the fit did) also made Sonic Mania shrink its window to 0.66.
+- **What measured fine:** at the panel's own size, fullscreen needs no change at all: Sonic Mania with `windowed=n` (even with
+  `fsWidth=1280 fsHeight=720`, which Wine clamps to the 640x480 desktop) never touched the screen and the focus daemon made no calls.
+- **The fix:** `mdeck-scale` (rootfs/src/mdeck-scale.c) draws the focused game window scaled and letterboxed on the X composite overlay
+  window with GLX texture-from-pixmap, Steam's overlay windows (`STEAM_OVERLAY`, the in-game menu, with alpha) on top. The X screen is
+  never resized and the game window is neither moved nor undecorated, so a game never sees a change. `mdeck-focus` names the window in the
+  root property `MDECK_SCALE_WINDOW` after the size has held still for 300 ms and starts the scaler only then (it takes about 45 MB of
+  memory, so it exits when nothing needs scaling; a game window that vanishes keeps the scaling for 700 ms so a Wine mode switch does not
+  toggle it). Windows bigger than the panel or between 240x160 and the panel's size are scaled; `MDECK_FIT` or a missing `mdeck-scale` falls
+  back to the old screen fit. Verified on the RG40XX-H: Sonic Mania windowed fills the panel at 640x360, the Steam menu opens over it,
+  Eets (1024x768) scales and the scaler exits when the game quits, Hotline Miami and Eets pass `mdeck-gametest`. CPU cost is negligible
+  (glxgears stays at 60 fps with the scaler on). Not done: mouse input is not mapped through the scaling (pad-driven games do not care),
+  and nearest-neighbour filtering is `MDECK_SCALE_FILTER=nearest`.
+- **Measurement pitfalls found on the way:** `/tmp` is a tmpfs, so a runaway log there is RAM (a stray 446 MB log made the handheld swap and
+  burned a core: it looked like a slow game); `pkill -f` inside an adb command kills the adb shell; Sonic Mania runs at about 2 cores
+  (x86 under FEX) whatever the compositor does.
+- **Memory with a game running (RG40XX-H, Sonic Mania):** the Steam UI's web helper holds about 490 MB (a 311 MB renderer and an 80 MB
+  browser process, PSS plus swapped), the game 140 MB, Steam 135 MB: the Steam UI is the memory to go after next.
