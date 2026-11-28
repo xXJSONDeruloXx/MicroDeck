@@ -5,10 +5,13 @@
 // activates the window of the first app in Steam's base-layer list through the window manager.
 // A game window bigger than the panel (old Linux games open 800x600 or 1280x720 windows) would be cut off, as it would not
 // be under gamescope, which scales it: mdeck-fit scales the whole X screen to such a window while it has the focus.
+#define _GNU_SOURCE
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XRes.h>
+#include <dirent.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -204,7 +207,8 @@ static void fit_screen(struct win *pick) {
   if (w != want_w || h != want_h || win != want_win) {
     want_w = w; want_h = h; want_win = win; want_since = now_ms();
   }
-  long wait = w ? SETTLE_MS : (steam ? 0 : GRACE_MS);
+  // the scaler costs a GL start (several seconds of CPU while a launch is already short of it): wait out the short-lived dialogs Wine opens
+  long wait = w ? (use_scaler ? 1000 : SETTLE_MS) : (steam ? 0 : GRACE_MS);
   int applied = w ? (fitted == pick->w && fitted_w == w && fitted_h == h) : !fitted;
   if (applied) {
     pending = 0;
@@ -239,6 +243,70 @@ static void fit_screen(struct win *pick) {
       XMoveWindow(d, pick->w, 0, 0);
     }
   }
+}
+
+// While a game launches or runs, Steam's web helper (the Steam UI) is kept to one core: during a launch it used 150-240 % CPU of the 400 %
+// the container setup and Wine need, and a launch took 117 and 110 s with it pinned against 128 and 131 s without. It gets every core
+// back while Steam's menu is open (the UI has to be quick then) and when no game is running. MDECK_UI_PIN=0 turns this off.
+static int pin_enabled = 1, pin_state = -1, ncpu = 4;
+static long pin_checked;
+
+static void set_web_affinity(int pin) {
+  cpu_set_t set;
+  CPU_ZERO(&set);
+  if (pin) CPU_SET(ncpu - 1, &set);
+  else for (int i = 0; i < ncpu && i < CPU_SETSIZE; i++) CPU_SET(i, &set);
+  DIR *proc = opendir("/proc");
+  if (!proc) return;
+  struct dirent *e;
+  while ((e = readdir(proc))) {
+    int pid = atoi(e->d_name);
+    char path[64], comm[32];
+    if (pid <= 1) continue;
+    snprintf(path, sizeof path, "/proc/%d/comm", pid);
+    if (read_file(path, comm, sizeof comm) <= 0 || strncmp(comm, "steamwebhelper", 14)) continue;
+    snprintf(path, sizeof path, "/proc/%d/task", pid);
+    DIR *tasks = opendir(path);
+    if (!tasks) continue;
+    struct dirent *t;
+    while ((t = readdir(tasks))) {
+      int tid = atoi(t->d_name);
+      if (tid > 0) sched_setaffinity(tid, sizeof set, &set);
+    }
+    closedir(tasks);
+  }
+  closedir(proc);
+}
+
+// Is a game being launched or running? (`reaper SteamLaunch AppId=<N>` exists from the moment Steam starts the launch, long before a window)
+static int game_launching(void) {
+  DIR *proc = opendir("/proc");
+  if (!proc) return 0;
+  struct dirent *e;
+  int found = 0;
+  while (!found && (e = readdir(proc))) {
+    int pid = atoi(e->d_name);
+    char path[64], buf[512];
+    if (pid <= 1) continue;
+    snprintf(path, sizeof path, "/proc/%d/cmdline", pid);
+    int n = read_file(path, buf, sizeof buf);
+    found = n > 0 && memmem(buf, n, "reaper", 6) && memmem(buf, n, "SteamLaunch", 11) && memmem(buf, n, "AppId=", 6);
+  }
+  closedir(proc);
+  return found;
+}
+
+static void update_pin(int game_in_front, int menu_open) {
+  if (!pin_enabled) return;
+  long now = (long)time(NULL);
+  if (now == pin_checked) return;   // at most once a second
+  pin_checked = now;
+  int want = !menu_open && (game_in_front || game_launching());
+  if (want || want != pin_state) {  // while pinned, again every pass: new helper processes keep appearing
+    set_web_affinity(want);
+    if (verbose && want != pin_state) fprintf(stderr, "mdeck-focus: web helper %s\n", want ? "pinned to one core" : "released");
+  }
+  pin_state = want;
 }
 
 static void sync_focus(void) {
@@ -300,6 +368,7 @@ static void sync_focus(void) {
     XChangeProperty(d, root, a_focused_window, XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&w, 1);
   }
   fit_screen(pick);
+  update_pin(pick && pick->appid != STEAM_APPID, overlay && overlay_input);
   Window want = overlay && (overlay_input || !pick) ? overlay : pick ? pick->w : 0;
   if (want && (Window)get_cardinal(root, a_active, 0) != want) activate(want);
   if (overlay) XRaiseWindow(d, overlay);
@@ -312,6 +381,9 @@ int main(int argc, char **argv) {
   if (getenv("MDECK_SCALE_CMD")) scale_cmd = getenv("MDECK_SCALE_CMD");
   use_scaler = !getenv("MDECK_FIT") && access(scale_cmd, X_OK) == 0;
   signal(SIGCHLD, SIG_IGN);
+  pin_enabled = !getenv("MDECK_UI_PIN") || strcmp(getenv("MDECK_UI_PIN"), "0");
+  ncpu = (int)sysconf(_SC_NPROCESSORS_ONLN);
+  if (ncpu < 2) pin_enabled = 0;
   {  // a crashed run may have left the screen scaled; Xlib reads the screen size once, when it connects, so reset before that
     char cmd[256];
     snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
