@@ -3,6 +3,8 @@
 # patch-webhelper.py (a child process) reads it
 . /etc/steam-session.conf
 export WEBHELPER_EXTRA_ARGS
+# GAME_ENV="A=1 B=2": environment for Steam and so for every game and tool it starts (for example FEX_* settings)
+for kv in $GAME_ENV; do export "$kv"; done
 root=$HOME/.local/share/Steam
 log=$HOME/steam-run.log
 . /usr/local/share/mdeck/setup-ui.sh

@@ -516,3 +516,19 @@ only complaint is "no valid GPUs", as expected without a Mali. The test on the M
   decoded images. What is left to try: ending or restarting the UI renderer, or freezing the web helper while a game is in front
   (Geometry Wars measured 3.0 FPS with it stopped against 1.3 running).
 
+## 2026-11-28: game launch time and Sonic Mania speed (RG40XX-H)
+- **Launch timeline (8-Bit Bayonetta, Proton, 128 s to the front):** Steam runs an "install script evaluator" (the shared Steamworks redistributable
+  depots 228984 vc2012 and 228990 DirectX, "2 steps") before every launch of a game that lists them, and that is a whole extra Proton
+  startup: pressure-vessel container setup about 15 s, `proton run` Python about 11 s, Wine prefix boot (wineboot, services, explorer,
+  winedevice) about 30 s, then the real launch does the container, Proton and Wine again. The evaluator itself takes about 6 s. Not found:
+  a safe way to make Steam skip it.
+- **The Steam UI's web helper took 150-240 % CPU of the 400 % during a launch** (CPU pressure `some` 50-60 %). Pinning it to one core
+  while a game launches or runs cut launches by 10-20 s (128 -> 117, 131 -> 110) and Eets reaches the front in 25 s instead of 31-35 s.
+  `mdeck-focus` does it (`MDECK_UI_PIN=0` disables) and frees the helper while Steam's menu is open.
+- **Sonic Mania (x86 Windows game, Proton ARMv8 + FEX, WineD3D on Panfrost)** shows 14-19 unique frames per second at its title screen with
+  the game at about 200 % CPU. FEX with TSO emulation off (`FEX_TSOENABLED=0` in the environment) measured 158-162 unique frames in 10 s
+  against 125-159 with it on: inside the noise, and unsafe for multi-threaded games, so not enabled. `proton-fex-config.json` in a prefix
+  is rewritten from `STEAM_COMPAT_FEX_CONFIG` at every launch, so editing it does nothing; `SetAppLaunchOptions` over DevTools did not reach the
+  game's environment either. `GAME_ENV="NAME=value ..."` in `/etc/steam-session.conf` now exports variables to Steam and so to every game and
+  tool (FEX_* variables reach the emulator).
+
