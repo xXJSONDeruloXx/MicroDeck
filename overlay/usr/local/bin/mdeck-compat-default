@@ -135,6 +135,54 @@ def installed_apps():
             yield m.group(1), os.path.join(apps, "common", folder.group(1))
 
 
+# Direct3D 11 games. The session runs Proton with WineD3D by default (Direct3D 9 on the GPU through Panfrost's OpenGL), which cannot create a
+# Direct3D 11 device: Unity then reports "error initializing player" (an older Unity falls back to Direct3D 9, a newer one has no fallback). DXVK
+# (PROTON_USE_WINED3D=0, Vulkan on llvmpipe) can, slowly. A game whose programs ask for D3D11CreateDevice gets that in its launch options, once,
+# unless it already has launch options of its own.
+D3D11_MARKERS = (b"D3D11CreateDevice", b"d3d11.dll", b"D3D11.dll", b"D3D11.DLL")
+D3D11_OPTIONS = "PROTON_USE_WINED3D=0 %command%"
+
+
+def needs_d3d11(folder, limit=120 << 20):
+    """Does a Windows program in the top two folder levels of the game use Direct3D 11?"""
+    import mmap
+    for root, dirs, files in os.walk(folder):
+        if root[len(folder):].count(os.sep) >= 2:
+            dirs[:] = []
+            continue
+        for name in files:
+            if not name.lower().endswith((".exe", ".dll")):
+                continue
+            path = os.path.join(root, name)
+            try:
+                if os.path.getsize(path) > limit or os.path.getsize(path) < 1024:
+                    continue
+                with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                    if any(mm.find(m) >= 0 for m in D3D11_MARKERS):
+                        return True
+            except (OSError, ValueError):
+                continue
+    return False
+
+
+def launch_options(appid):
+    """The launch options saved for an app in Steam's local config, '' when none."""
+    users = os.path.join(STEAM, "userdata")
+    try:
+        accounts = os.listdir(users)
+    except OSError:
+        return ""
+    for account in accounts:
+        try:
+            text = open(os.path.join(users, account, "config", "localconfig.vdf"), encoding="utf-8", errors="replace").read()
+        except OSError:
+            continue
+        m = re.search(r'"%s"\s*\{(?:[^{}]|\{[^{}]*\})*?"LaunchOptions"\s*"([^"]*)"' % re.escape(appid), text)
+        if m and m.group(1).strip():
+            return m.group(1)
+    return ""
+
+
 def tool_installed(appid):
     path = os.path.join(STEAM, "steamapps", "appmanifest_%s.acf" % appid)
     try:
@@ -220,6 +268,19 @@ def main():
                 asked[app] = time.time()
                 if mdeck("SteamClient.Apps.SpecifyCompatTool(%s,'%s')" % (app, FEX_TOOL)).returncode == 0:
                     print("mdeck-compat-default: app %s is a Linux x86 game, asked for %s" % (app, FEX_TOOL), flush=True)
+            # Windows games that need Direct3D 11 get DXVK (once: a choice made by hand later is left alone)
+            for app, folder in games:
+                key = "d3d:" + app
+                if key in handled or mapping.get(app) == FEX_TOOL or is_linux_x86_only(folder):
+                    continue
+                if launch_options(app) or not needs_d3d11(folder):
+                    handled.add(key)
+                    todo.append(app)
+                    continue
+                if mdeck("SteamClient.Apps.SetAppLaunchOptions(%s,%s)" % (app, json.dumps(D3D11_OPTIONS))).returncode == 0:
+                    handled.add(key)
+                    todo.append(app)
+                    print("mdeck-compat-default: app %s uses Direct3D 11: launch options set to DXVK" % app, flush=True)
             if todo:
                 os.makedirs(os.path.dirname(STATE), exist_ok=True)
                 json.dump(sorted(handled), open(STATE, "w"))

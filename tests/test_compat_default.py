@@ -86,6 +86,56 @@ class CompatDefaultTest(unittest.TestCase):
         self.assertEqual(self.mod.read_mapping(open(self.mod.CONFIG).read())["219150"], "proton-experimental")
 
 
+class Direct3D11Test(unittest.TestCase):
+    """Games that ask for Direct3D 11 get DXVK in their launch options; the session default (WineD3D) cannot create the device."""
+
+    def setUp(self):
+        self.mod = helpers.load("compat_default", "usr", "local", "bin", "mdeck-compat-default")
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.mod.STEAM = os.path.join(self.tmp.name, "Steam")
+
+    def game(self, files):
+        folder = os.path.join(self.tmp.name, "game")
+        for rel, data in files.items():
+            path = os.path.join(folder, rel)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "wb") as f:
+                f.write(data)
+        return folder
+
+    def test_a_program_that_creates_a_d3d11_device_needs_it(self):
+        folder = self.game({"Game.exe": b"MZ" + b"\0" * 2000 + b"D3D11CreateDevice" + b"\0" * 100})
+        self.assertTrue(self.mod.needs_d3d11(folder))
+
+    def test_a_dll_in_a_subfolder_is_found(self):
+        folder = self.game({"Game.exe": b"MZ" + b"\0" * 4000, "Game_Data/UnityPlayer.dll": b"MZ" + b"\0" * 3000 + b"d3d11.dll"})
+        self.assertTrue(self.mod.needs_d3d11(folder))
+
+    def test_a_direct3d9_game_does_not(self):
+        folder = self.game({"Game.exe": b"MZ" + b"\0" * 2000 + b"Direct3DCreate9" + b"\0" * 100})
+        self.assertFalse(self.mod.needs_d3d11(folder))
+
+    def write_config(self, options):
+        path = os.path.join(self.mod.STEAM, "userdata", "1", "config")
+        os.makedirs(path)
+        lines = [
+            '"UserLocalConfigStore"', '{', '"Software"', '{', '"Valve"', '{', '"Steam"', '{', '"apps"', '{',
+            '"777"', '{', '"cloud"', '{', '"last_sync_state" "synchronized"', '}',
+            '"LaunchOptions" "%s"' % options, '}',
+            '"888"', '{', '"LaunchOptions" ""', '}',
+            '}', '}', '}', '}', '}',
+        ]
+        with open(os.path.join(path, "localconfig.vdf"), "w") as f:
+            f.write(chr(10).join(lines) + chr(10))
+
+    def test_launch_options_the_user_set_are_read_and_empty_ones_are_not(self):
+        self.write_config("-novid %command%")
+        self.assertEqual(self.mod.launch_options("777"), "-novid %command%")
+        self.assertEqual(self.mod.launch_options("888"), "")
+        self.assertEqual(self.mod.launch_options("999"), "")
+
+
 class PressInstallTest(unittest.TestCase):
     """The daemon presses Install on Steam's dialog for a missing tool: a SteamOS note first, then the install dialog."""
 

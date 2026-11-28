@@ -141,6 +141,9 @@ static void layer_start(struct layer *l, Window w) {
   memset(l, 0, sizeof *l);
   l->w = w;
   XCompositeRedirectWindow(d, w, CompositeRedirectManual);
+  // a window that was already mapped gets a fresh, empty backing pixmap: one that never repaints by itself (a Wine dialog) would stay
+  // black, so ask it to draw again
+  XClearArea(d, w, 0, 0, 0, 0, True);
   l->dmg = XDamageCreate(d, w, XDamageReportNonEmpty);
   XSelectInput(d, w, PropertyChangeMask | StructureNotifyMask);
   layer_bind(l);

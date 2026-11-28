@@ -321,6 +321,38 @@ static void update_pin(int game_in_front, int menu_open) {
   pin_state = want;
 }
 
+// Unity games of the Windows kind open a launcher dialog first ("<game> Configuration": resolution, quality, a Play! button) that wants a click or
+// Enter, which a handheld's pad cannot send, so the game would sit there. Enter starts it with the defaults. Once per dialog window, after it has
+// had time to appear. MDECK_UNITY_DIALOG=0 leaves the dialog alone.
+static int dialog_enabled = 1;
+static struct { Window w; long first; int done; } dialogs[16];
+static int ndialogs;
+
+static void skip_unity_dialog(struct win *pick) {
+  if (!dialog_enabled || !pick || pick->appid == STEAM_APPID) return;
+  char *name = NULL;
+  if (!XFetchName(d, pick->w, &name) || !name) return;
+  size_t len = strlen(name);
+  int match = len > 14 && !strcmp(name + len - 14, " Configuration");
+  XFree(name);
+  if (!match) return;
+  int i;
+  for (i = 0; i < ndialogs && dialogs[i].w != pick->w; i++) ;
+  if (i == ndialogs) {
+    if (ndialogs == 16) ndialogs = 0, i = 0;
+    dialogs[i].w = pick->w; dialogs[i].first = now_ms(); dialogs[i].done = 0;
+    if (i == ndialogs) ndialogs++;
+  }
+  if (dialogs[i].done) return;
+  if (now_ms() - dialogs[i].first < 1500) { pending = 1; return; }
+  dialogs[i].done = 1;
+  if (verbose) fprintf(stderr, "mdeck-focus: pressing Enter on the launcher dialog 0x%lx\n", pick->w);
+  if (fork() == 0) {
+    execlp("xdotool", "xdotool", "key", "--clearmodifiers", "Return", (char *)NULL);
+    _exit(1);
+  }
+}
+
 static void sync_focus(void) {
   unsigned long n;
   long *clients = get_cardinals(root, a_client_list, XA_WINDOW, &n);
@@ -381,6 +413,7 @@ static void sync_focus(void) {
   }
   fit_screen(pick);
   update_pin(pick && pick->appid != STEAM_APPID, overlay && overlay_input);
+  skip_unity_dialog(pick);
   Window want = overlay && (overlay_input || !pick) ? overlay : pick ? pick->w : 0;
   if (want && (Window)get_cardinal(root, a_active, 0) != want) activate(want);
   if (overlay) XRaiseWindow(d, overlay);
@@ -393,6 +426,7 @@ int main(int argc, char **argv) {
   if (getenv("MDECK_SCALE_CMD")) scale_cmd = getenv("MDECK_SCALE_CMD");
   use_scaler = !getenv("MDECK_FIT") && access(scale_cmd, X_OK) == 0;
   pin_enabled = !getenv("MDECK_UI_PIN") || strcmp(getenv("MDECK_UI_PIN"), "0");
+  dialog_enabled = !getenv("MDECK_UNITY_DIALOG") || strcmp(getenv("MDECK_UNITY_DIALOG"), "0");
   CPU_ZERO(&all_cpus);
   if (sched_getaffinity(0, sizeof all_cpus, &all_cpus) != 0 || CPU_COUNT(&all_cpus) < 2) pin_enabled = 0;
   for (int i = 0; i < CPU_SETSIZE; i++) if (CPU_ISSET(i, &all_cpus)) pin_cpu = i;   // the highest CPU we may use

@@ -15,3 +15,20 @@ Big Picture; Windows games through Proton ARM64 + FEX. Direct3D defaults to Wine
 How to test a title: install it from Big Picture, then
 `mdeck eval 'SteamClient.Apps.SetAppLaunchOptions(<appid>, "DXVK_HUD=fps /usr/local/bin/mdeck-wrap %command%")'`
 and `mdeck eval 'SteamClient.Apps.RunGame("<appid>","",-1,100)'`; the wrapper log is `/tmp/mdeck-wrap-<appid>.log`.
+
+## Direct3D 11 games (Unity and others), 2026-11-28
+- A tester reported "error initializing player" on most Direct3D 11 games and a desktop mode that looked empty. The first is the session's default:
+  Proton runs with WineD3D (`PROTON_USE_WINED3D=1`, Direct3D 9 on the GPU through Panfrost's OpenGL 3.1), which cannot create a Direct3D 11 device.
+  Unity logs `d3d11: failed to create D3D11 device (0x80004005)`; an old Unity (8-Bit Bayonetta, 5.5) then falls back to Direct3D 9, a newer one has no fallback.
+- `mdeck-compat-default` now looks for `D3D11CreateDevice` / `d3d11.dll` in a game's programs (top two folder levels) and sets the launch options
+  `PROTON_USE_WINED3D=0 %command%` (DXVK on llvmpipe) once, unless the game already has launch options. Over DevTools the call is
+  `SteamClient.Apps.SetAppLaunchOptions(<appid as a NUMBER>, "...")`; with the app id as a string it silently does nothing.
+- Measured on the RG40XX-H: Vampire Survivors (Unity 6000.0.62) creates `Direct3D 11.0 [level 11.1]` on llvmpipe and goes on to start its engine;
+  8-Bit Bayonetta creates `Direct3D 11.0 [level 11.0]` and runs its splash screens. Both are slow (the game uses all four cores for the software
+  renderer): Bayonetta's PlatinumGames logo alternated between the logo and black about six times a second and the game did not reach its title in
+  five minutes. This works, it is not fast; a Vulkan driver on the Mali GPU (docs/research/panvk-vulkan-dxvk.md) is what would make it playable.
+- Unity games of the Windows kind open a launcher dialog first ("<game> Configuration": resolution, quality, Play!). A pad cannot click it, so the game
+  never started. `mdeck-focus` now presses Enter on it once (`MDECK_UNITY_DIALOG=0` turns that off); Bayonetta then starts.
+- The scaler showed such a dialog black: a window that was already mapped gets a new, empty backing pixmap when it is redirected, and a static Wine dialog
+  never repaints on its own. `mdeck-scale` now asks a window to repaint (`XClearArea` with exposures) right after redirecting it.
+
