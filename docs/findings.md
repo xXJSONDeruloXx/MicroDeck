@@ -499,3 +499,20 @@ only complaint is "no valid GPUs", as expected without a Mali. The test on the M
   (x86 under FEX) whatever the compositor does.
 - **Memory with a game running (RG40XX-H, Sonic Mania):** the Steam UI's web helper holds about 490 MB (a 311 MB renderer and an 80 MB
   browser process, PSS plus swapped), the game 140 MB, Steam 135 MB: the Steam UI is the memory to go after next.
+
+## 2026-11-28: the Steam UI's blur is what makes it slow (RG40XX-H, software rendering)
+- **Measured:** the library home page with nobody touching it used about 190 % CPU in the web helper (the compositor thread alone 85 %),
+  rendered about 5 frames per second (`requestAnimationFrame` counted in the page) and the scroll benchmark `mdeck-uibench` cost 215 %.
+  Valve's UI blurs backgrounds and panels with CSS `filter` and `backdrop-filter`, which a software renderer on four A53 cores pays in
+  every frame. Switching off only one of the two did not help (237 % / 148 % idle, 7 fps); switching off both: **10-14 % idle, 56 fps**,
+  scroll benchmark 138-160 %. Shipped as an injected style in `mdeck ui-fixes` (`UI_BLUR=1` in `/etc/steam-session.conf` restores the blur).
+  The UI looks the same apart from opaque panels and sharp backgrounds.
+- **Chromium switches changed almost nothing** (webhelper memory after the same scroll workload, CPU in the benchmark): none 780 MB / 216 %,
+  `--disable-smooth-scrolling` 730 MB / 211 %, `--enable-low-end-device-mode` 774 MB / 208 %, both 787 MB / 201 %. `WEBHELPER_EXTRA_ARGS` in
+  `/etc/steam-session.conf` now passes extra switches to the helper (the wrapper script has about 150 spare bytes).
+- **Memory:** the web helper holds 520 MB right after the UI loads and grows to about 930 MB (RAM plus zram) with use. The JavaScript heap
+  is 80 MB at start and 180 MB after three rounds of library scrolling, and a forced garbage collection (`--js-flags=--expose-gc`, `gc()`)
+  frees none of it: it is data Valve's UI keeps, not garbage, so no browser flag will return it. The rest is the renderer's bitmaps and
+  decoded images. What is left to try: ending or restarting the UI renderer, or freezing the web helper while a game is in front
+  (Geometry Wars measured 3.0 FPS with it stopped against 1.3 running).
+

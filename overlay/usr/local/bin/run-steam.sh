@@ -1,6 +1,8 @@
 #!/bin/bash
 # Runs as the steam user with DISPLAY set. Settings come from /etc/steam-session.conf.
+# patch-webhelper.py (a child process) reads it
 . /etc/steam-session.conf
+export WEBHELPER_EXTRA_ARGS
 root=$HOME/.local/share/Steam
 log=$HOME/steam-run.log
 . /usr/local/share/mdeck/setup-ui.sh

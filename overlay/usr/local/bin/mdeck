@@ -160,13 +160,32 @@ UI_FIXES_JS = """(function(){
   document.querySelectorAll("video").forEach(fix);
 })()"""
 
+# Steam's UI blurs backgrounds and panels (CSS filter and backdrop-filter), which a software renderer on four A53 cores pays for in every
+# frame: the library home page sat at about 190 % CPU with nobody touching it and rendered about 5 frames per second; without the blur
+# it idles near 10 % and renders 56 (measured on the RG40XX-H). UI_BLUR=1 in /etc/steam-session.conf keeps Valve's look.
+UI_PERF_CSS = "*,*::before,*::after{backdrop-filter:none !important;-webkit-backdrop-filter:none !important;filter:none !important}"
+UI_PERF_JS = """;(function(){
+  if (window.__mdeckUiPerf) return;
+  window.__mdeckUiPerf = 1;
+  function add() {
+    if (document.getElementById("mdeck-perf")) return;
+    var s = document.createElement("style");
+    s.id = "mdeck-perf";
+    s.textContent = %s;
+    (document.head || document.documentElement).appendChild(s);
+  }
+  add();
+  document.addEventListener("DOMContentLoaded", add);
+})()""" % json.dumps(UI_PERF_CSS)
+
 
 def ui_fixes_session(target):
     """One DevTools connection per page: scripts registered for new documents last only as long as it stays open."""
     ws = WebSocket(target["webSocketDebuggerUrl"], 30)
+    source = UI_FIXES_JS + ("" if conf("UI_BLUR") == "1" else UI_PERF_JS)
     try:
-        ws.send(json.dumps({"id": 1, "method": "Page.addScriptToEvaluateOnNewDocument", "params": {"source": UI_FIXES_JS}}))
-        ws.send(json.dumps({"id": 2, "method": "Runtime.evaluate", "params": {"expression": UI_FIXES_JS}}))
+        ws.send(json.dumps({"id": 1, "method": "Page.addScriptToEvaluateOnNewDocument", "params": {"source": source}}))
+        ws.send(json.dumps({"id": 2, "method": "Runtime.evaluate", "params": {"expression": source}}))
         ws.s.settimeout(None)
         while True:
             ws.recv()
