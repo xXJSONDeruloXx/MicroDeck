@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <time.h>
 #include <unistd.h>
 
 #define STEAM_APPID 769
@@ -128,36 +129,75 @@ static void activate(Window w) {
   XRaiseWindow(d, w);
 }
 
-// Scale the X screen to the focused game window when that is bigger than the panel, and back when it is not.
+// Scale the X screen to the focused game window when it is bigger than the panel (old Linux games open 800x600 or 1280x720 windows),
+// letterboxed. Smaller windows are not magnified this way: a RandR transform that magnifies makes Wine see a smaller monitor and shrink
+// the game's window to match, and the fit and its undoing then chase each other (measured with Sonic Mania's 424x240 window).
+// Changing the screen is a modeset that blanks the panel for a moment, so a change waits until the wanted size has held still for
+// SETTLE_MS (games resize and recreate their window several times while starting or switching between windowed and fullscreen), and
+// going back to the panel's size because the game's window vanished waits GRACE_MS: Wine unmaps a window and maps a new one to change
+// its mode, and resetting in between would blank the panel twice.
+#define SETTLE_MS 300
+#define GRACE_MS 700
+static int pending;             // a change is waiting for its delay: the main loop wakes sooner
+static int want_w, want_h;      // what the last pass wanted (0 x 0: the panel's own size), for which window, and since when
+static Window want_win;
+static long want_since;
+
+static long now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec * 1000L + ts.tv_nsec / 1000000L;
+}
+
+static void apply_fit(int w, int h) {
+  char cmd[256];
+  if (w) snprintf(cmd, sizeof cmd, "%s %d %d", fit_cmd, w, h);
+  else snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
+  if (verbose) fprintf(stderr, "mdeck-focus: %s\n", cmd);
+  if (system(cmd) != 0) fprintf(stderr, "mdeck-focus: %s failed\n", cmd);
+}
+
 static void fit_screen(struct win *pick) {
   XWindowAttributes wa;
-  if (pick && pick->appid != STEAM_APPID && XGetWindowAttributes(d, pick->w, &wa) && (wa.width > base_w || wa.height > base_h)) {
-    if (fitted != pick->w || fitted_w != wa.width || fitted_h != wa.height) {
+  int w = 0, h = 0;                       // the size the screen should have: 0 x 0 is the panel's own
+  int steam = pick && pick->appid == STEAM_APPID;
+  if (pick && !steam && XGetWindowAttributes(d, pick->w, &wa)) {
+    if (wa.width > base_w || wa.height > base_h) { w = wa.width; h = wa.height; }
+  }
+  Window win = w ? pick->w : 0;
+  if (w != want_w || h != want_h || win != want_win) {
+    want_w = w; want_h = h; want_win = win; want_since = now_ms();
+  }
+  long wait = w ? SETTLE_MS : (steam ? 0 : GRACE_MS);
+  int applied = w ? (fitted == pick->w && fitted_w == w && fitted_h == h) : !fitted;
+  if (applied) {
+    pending = 0;
+  } else if (now_ms() - want_since < wait) {
+    pending = 1;                           // not yet: the main loop comes back
+    return;
+  } else {
+    pending = 0;
+    if (w) {
       // undecorated and at the origin, so the picture is the window and nothing else
       Atom motif = XInternAtom(d, "_MOTIF_WM_HINTS", False);
       long hints[5] = {2, 0, 0, 0, 0};
       XChangeProperty(d, pick->w, motif, motif, 32, PropModeReplace, (unsigned char *)hints, 5);
       XMoveWindow(d, pick->w, 0, 0);
       XFlush(d);
-      char cmd[256];
-      snprintf(cmd, sizeof cmd, "%s %d %d", fit_cmd, wa.width, wa.height);
-      if (verbose) fprintf(stderr, "mdeck-focus: %s\n", cmd);
-      if (system(cmd) == 0) { fitted = pick->w; fitted_w = wa.width; fitted_h = wa.height; }
+      if (!(fitted && fitted_w == w && fitted_h == h)) apply_fit(w, h);   // a game's new window of the same size needs no modeset
+      fitted = pick->w; fitted_w = w; fitted_h = h;
+    } else {
+      apply_fit(0, 0);
+      fitted = 0;
     }
+  }
+  if (w && fitted == pick->w) {
     // Games centre their window on the screen they saw (SDL does it after it maps): put it back at the origin whenever it drifts
     int rx = 0, ry = 0; Window child;
     if (XTranslateCoordinates(d, pick->w, root, 0, 0, &rx, &ry, &child) && (rx != 0 || ry != 0)) {
       if (verbose) fprintf(stderr, "mdeck-focus: moving 0x%lx from %d,%d to the origin\n", pick->w, rx, ry);
       XMoveWindow(d, pick->w, 0, 0);
     }
-    return;
-  }
-  if (fitted) {
-    if (verbose) fprintf(stderr, "mdeck-focus: resetting the screen\n");
-    char cmd[256];
-    snprintf(cmd, sizeof cmd, "%s reset", fit_cmd);
-    if (system(cmd) != 0) fprintf(stderr, "mdeck-focus: %s failed\n", cmd);
-    fitted = 0;
   }
 }
 
@@ -263,7 +303,7 @@ int main(int argc, char **argv) {
     }
     if (relevant) sync_focus();
     fd_set fds; FD_ZERO(&fds); FD_SET(fd, &fds);
-    struct timeval tv = {2, 0};
+    struct timeval tv = {pending ? 0 : 2, pending ? 100000 : 0};
     // The periodic pass picks up windows whose size or class changed without a root-level event.
     if (select(fd + 1, &fds, NULL, NULL, &tv) == 0) sync_focus();
   }
