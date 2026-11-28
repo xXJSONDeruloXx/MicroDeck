@@ -16,7 +16,7 @@ border_width = 0
 background_color = #f0b030 100
 border_color = #f0b030 100
 
-panel_items = PTSEEC
+panel_items = PLTSEEPC
 panel_size = 100% 26
 panel_position = top center horizontal
 panel_layer = top
@@ -39,8 +39,27 @@ clock_font_color = #f0f0f0 100
 clock_padding = 4 0
 systray_padding = 2 1 2
 
+launcher_padding = 2 1 2
+launcher_background_id = 0
+launcher_icon_size = 22
+launcher_icon_theme = hicolor
+launcher_item_app = /usr/share/applications/firefox-esr.desktop
+launcher_item_app = /usr/share/applications/abiword.desktop
+launcher_item_app = /usr/share/applications/org.gnumeric.gnumeric.desktop
+launcher_item_app = /usr/share/applications/org.xfce.mousepad.desktop
+launcher_item_app = /usr/share/applications/pcmanfm.desktop
+launcher_item_app = /usr/share/applications/debian-xterm.desktop
+
 button = new
-button_text = Steam
+button_text = Apps
+button_font = DejaVu Sans Bold 8
+button_font_color = #101010 100
+button_background_id = 3
+button_padding = 8 2 6
+button_lclick_command = xdotool key Menu
+
+button = new
+button_text = Gaming mode
 button_font = DejaVu Sans 8
 button_font_color = #f0f0f0 100
 button_background_id = 2
@@ -48,7 +67,7 @@ button_padding = 6 2 4
 button_lclick_command = /usr/local/bin/steamos-session-select gamescope
 
 execp = new
-execp_command = cat ${XDG_RUNTIME_DIR}/mdeck-pad-mode 2>/dev/null
+execp_command = sh -c 'echo "$(cat ${XDG_RUNTIME_DIR}/mdeck-pad-mode 2>/dev/null)  Start: apps"'
 execp_interval = 1
 execp_font = DejaVu Sans Bold 8
 execp_font_color = #f0b030 100
