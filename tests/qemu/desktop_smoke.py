@@ -37,6 +37,11 @@ def main():
     run(STEAM % "nohup /usr/local/bin/mdeck-desktop >/tmp/desk.log 2>&1 &")
     run("sleep 8")
     check("desktop session processes", "ps -eo comm | grep -E '^(openbox|tint2)$' | sort | tr '\n' ' '", "openbox tint2")
+    # the panel loads its launcher icons, which takes a while on the virtual device
+    for _ in range(12):
+        if "Geometry" in run(STEAM % "xdotool search --class tint2 getwindowgeometry %@")[1]:
+            break
+        run("sleep 3")
     check("panel is a window at the top", STEAM % "xdotool search --class tint2 getwindowgeometry %@", "Geometry: 640x26")
     check("pad daemon needs the built-in pad", "cat /tmp/desk.log", "no built-in pad")
     before = run(STEAM % "xdotool search --onlyvisible --name '' | wc -l")[1]
