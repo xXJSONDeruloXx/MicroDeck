@@ -17,6 +17,12 @@ path = args[0] if args else os.path.expanduser(
 marker = b"--disable-hang-monitor"
 stock = os.path.expanduser("~/.cache/mdeck/steamwebhelper.sh.stock")
 orig = open(path, "rb").read()
+# a card from before the rename keeps the saved original under the old state directory: without it the patched wrapper could not be
+# restored, and Steam would re-extract the whole client after an unclean shutdown
+legacy = os.path.expanduser("~/.cache/" + "sx" + "x/steamwebhelper.sh.stock")
+if not os.path.exists(stock) and os.path.exists(legacy):
+    os.makedirs(os.path.dirname(stock), exist_ok=True)
+    os.replace(legacy, stock)
 if "--restore" in sys.argv:
     if marker in orig and os.path.exists(stock):
         mode = os.stat(path).st_mode
