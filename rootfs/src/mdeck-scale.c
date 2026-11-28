@@ -32,7 +32,7 @@ struct layer {
 
 static Display *d;
 static Window root, cow;
-static Atom a_target, a_overlay, a_client_list;
+static Atom a_target, a_overlay, a_client_list, a_filter, a_scaler;
 static int sw, sh, verbose, damage_base;
 static GLXContext ctx;
 static GLXWindow gwin;
@@ -55,6 +55,17 @@ static unsigned long cardinal(Window w, Atom prop) {
     XFree(data);
   }
   return v;
+}
+
+// Steam writes gamescope's scaling choices (its Quick Access menu) on the root window: GAMESCOPE_NEW_SCALING_FILTER (0 linear, 1 nearest,
+// 2 FSR, 3 NIS, 4 pixel) and GAMESCOPE_NEW_SCALING_SCALER (0 auto, 1 integer, 2 fit, 3 fill, 4 stretch). FSR and NIS are drawn linear.
+static int root_cardinal(Atom prop, unsigned long *v) {
+  Atom t; int f; unsigned long n = 0, after; unsigned char *data = NULL; int have = 0;
+  if (XGetWindowProperty(d, root, prop, 0, 1, False, AnyPropertyType, &t, &f, &n, &after, &data) == Success && data) {
+    if (n && f == 32) { *v = *(unsigned long *)data; have = 1; }
+    XFree(data);
+  }
+  return have;
 }
 
 static GLuint compile(GLenum type, const char *src) {
@@ -145,12 +156,12 @@ static void layer_stop(struct layer *l) {
   memset(l, 0, sizeof *l);
 }
 
-static void layer_draw(struct layer *l, float x, float y, float w, float h) {
+static void layer_draw(struct layer *l, float x, float y, float w, float h, int fil) {
   if (!l->gp) return;
   glBindTexture(GL_TEXTURE_2D, l->tex);
   bind_tex(d, l->gp, GLX_FRONT_EXT, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, fil);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, fil);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
   glUniform4f(u_rect, x, y, w, h);
@@ -173,9 +184,15 @@ static void paint(void) {
   glEnableVertexAttribArray(0);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
   if (game.gp) {
-    float s = (float)sw / game.width < (float)sh / game.height ? (float)sw / game.width : (float)sh / game.height;
-    float w = game.width * s, h = game.height * s;
-    layer_draw(&game, (sw - w) / 2, (sh - h) / 2, w, h);
+    unsigned long scaler = 0, fil = 0;
+    root_cardinal(a_scaler, &scaler);
+    int have_filter = root_cardinal(a_filter, &fil);
+    float sx = (float)sw / game.width, sy = (float)sh / game.height;
+    float fit = sx < sy ? sx : sy, fill = sx > sy ? sx : sy, s = fit, w, h;
+    if (scaler == 3) s = fill;
+    else if (scaler == 1) { s = (float)(int)fit; if (s < 1) s = fit; }
+    if (scaler == 4) { w = (float)sw; h = (float)sh; } else { w = game.width * s; h = game.height * s; }
+    layer_draw(&game, (sw - w) / 2, (sh - h) / 2, w, h, have_filter ? (fil == 1 || fil == 4 ? GL_NEAREST : GL_LINEAR) : filter);
   }
   for (int i = 0; i < MAXL; i++) {
     if (!overlays[i].w) continue;
@@ -183,7 +200,7 @@ static void paint(void) {
     if (XGetWindowAttributes(d, overlays[i].w, &wa) && wa.map_state == IsViewable) {
       int x = 0, y = 0; Window child;
       XTranslateCoordinates(d, overlays[i].w, root, 0, 0, &x, &y, &child);   // wa.x is relative to the window manager's frame
-      layer_draw(&overlays[i], x, y, wa.width, wa.height);
+      layer_draw(&overlays[i], x, y, wa.width, wa.height, GL_LINEAR);
     }
   }
   glXSwapBuffers(d, gwin);
@@ -280,6 +297,8 @@ int main(int argc, char **argv) {
   a_target = XInternAtom(d, "MDECK_SCALE_WINDOW", False);
   a_overlay = XInternAtom(d, "STEAM_OVERLAY", False);
   a_client_list = XInternAtom(d, "_NET_CLIENT_LIST", False);
+  a_filter = XInternAtom(d, "GAMESCOPE_NEW_SCALING_FILTER", False);
+  a_scaler = XInternAtom(d, "GAMESCOPE_NEW_SCALING_SCALER", False);
   XSelectInput(d, root, PropertyChangeMask | SubstructureNotifyMask);
   int dirty = 0;
   for (;;) {
@@ -308,6 +327,7 @@ int main(int argc, char **argv) {
         dirty = 1;
       } else if (e.type == PropertyNotify && e.xproperty.window == root && active) {
         sync_overlays();
+        dirty = 1;   // also when Steam changes the scaling filter or mode
       }
     }
     if (active && dirty) { paint(); dirty = 0; }
