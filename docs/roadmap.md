@@ -130,7 +130,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [x] Game windows on top, Steam button menu over games and back: `GAMESCOPE_WAYLAND_DISPLAY` turns on
       Steam's gamescope logic, `mdeck-focus` plays gamescope's side (base layer, overlay plane, focus). S
 - [x] Steam menu in game opens in ~6-9 s now (measured by `mdeck-gametest` on the v0.2.1 image; was 10-20 s).
-- [ ] Game mode for 1 GB: suspend or unload steamwebhelper while a game runs, per-game zram/swap
+- [~] Game mode for 1 GB: v0.9.2 pins the web helper to one core while a game launches or runs (launches 10-20 s faster; it is released while Steam's menu is open). Open: unloading its memory, per-game zram/swap
       (Switchdeck's `SD_GAMEMODE`). Measure free RAM in game before/after. M
       Measured 2026-11-27 (RG28XX, Geometry Wars via Proton in front): 839 of 975 MB used, 136 MB available, 1031 MB in zram (861 MB of data
       held in 280 MB, 3:1), the game 180 MB resident and all steamwebhelper processes together about 240 MB resident (the rest of Steam's UI is
@@ -152,8 +152,8 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
 - [x] Power menu: Restart verified; Shut down uses the same path and real poweroff works (dev mode is off in releases).
 - [ ] First-boot experience: Steam's OOBE (Wi-Fi setup via NetworkManager, sign-in QR) on a fresh image. M
 - [ ] Boot splash (Plymouth, SteamOS-style) and boot-time budget. S
-- [ ] Steam UI speed: CEF on the GPU (`CEF_GPU=1`, Panfrost GLES) vs software; webhelper memory. M
-- [~] Desktop mode (2026-11-27): works on the RG28XX through Steam's "Switch to Desktop": openbox, panel, pad-as-mouse, on-screen keyboard, Firefox, AbiWord, Gnumeric. See docs/research/desktop-mode.md. M
+- [x] Steam UI speed (v0.9.1, 2026-11-28): the cost was Valve's CSS blur, not the renderer: idle web helper 190 % -> 14 % CPU, 5 -> 56 fps (see findings.md). CEF on the GPU stays off. Open: the web helper's memory (520 MB -> 930 MB with use; Valve's JS keeps the data). M
+- [x] Desktop mode (v0.9.0, 2026-11-27; the user tested it on hardware and called it basically perfect): works on the RG28XX through Steam's "Switch to Desktop": openbox, panel, pad-as-mouse, on-screen keyboard, Firefox, AbiWord, Gnumeric. See docs/research/desktop-mode.md. M
 
 - [x] The gray "cast" square over the launch screen's controller diagram (and other videos) is fixed (2026-11-27). It is Chromium's overlay
       cast button, drawn at the top-left of every `<video>` that can cast: the launch screen plays `steamui/movies/steamdeck_*.webm`.
@@ -165,7 +165,7 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       `/etc/steam-session.conf` (the default). The screen appears for games with an official layout.
 
 ## 4. Hardware
-- [ ] Sleep/wake: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM
+- [x] Sleep/wake is on by default since v0.9.1 (s2idle, RTC and power-button wake confirmed on the RG40XX-H; the PMIC/TF-A route below is not needed). The old plan, kept for reference: ROCKNIX PR #3316 approach (TF-A `SYSTEM_SUSPEND` + SRAM stub built for this unit's DRAM
       type and timings, `opp-suspend`, axp20x-pek wake, phy/mmc fixes). Test only with `rtcwake` alarms. M/L
 - [x] Brightness from Steam's slider (Steam writes the backlight; udev rule for access).
 - [x] Bluetooth (2026-11-26): the RTL8821CS controller was already `hci0`; bluez and PipeWire's Bluetooth audio are in the image and
@@ -195,7 +195,8 @@ once Steam and Proton are on the card), the RK3568 SPL and watchdog specifics.
       path appears; the open questions are the black screen and the SIGBUS (docs/findings.md). L
 - [ ] gamescope on the GPU: make `VK_EXT_robustness2` nullDescriptor optional, handle the split display/GPU devices
       (gamescope #2070), synthesize an EDID for the DSI panel (Armada patches 0002/0003). L, high risk
-- [ ] Until then keep Xorg + openbox (works, low overhead).
+- [x] Gamescope-style scaling without gamescope (v0.9.1): `mdeck-scale` draws the focused game window scaled to the panel on the composite overlay with GLX texture-from-pixmap, Steam's menu and toasts on top, honouring Steam's scaling filter and mode; the screen is never resized. Open: mouse input is not mapped through the scaling; FPS limit (`GAMESCOPE_FPS_LIMIT`) is not implemented.
+- [x] Until real gamescope can run on the GPU keep Xorg + openbox (works, low overhead).
 
 ## 6. Release
 - [ ] Release images on GitHub with an install guide (flash, first boot, recovery).
