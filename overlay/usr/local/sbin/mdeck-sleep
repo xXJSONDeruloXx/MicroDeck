@@ -1,10 +1,10 @@
 #!/bin/sh
 # Sleep (s2idle) control and test.
 #   mdeck-sleep status        is it on, which RTC can wake the handheld, which wake sources are armed
-#   mdeck-sleep on | off      create or remove the "sleep" file on the boot partition (effective at once)
+#   mdeck-sleep on | off      remove or create the "nosleep" file on the boot partition (effective at once); sleep is on by default
 #   mdeck-sleep test [secs]   sleep through the real path (systemd, hooks) with an RTC alarm [60 s] as the fallback; press the power button
 #                           within that time. Prints what woke the handheld: "power-button" means it works, "rtc" means only the alarm did.
-FLAG=/boot/firmware/sleep
+FLAG=/boot/firmware/nosleep
 
 rtc() {  # the SoC's own RTC (its interrupt reaches the wake path); the I2C chip on some boards (pcf8563) has no wired alarm line
   for r in /sys/class/rtc/rtc*; do
@@ -26,16 +26,16 @@ apply() {
 
 case "${1:-status}" in
   status)
-    [ -f "$FLAG" ] && echo "sleep: on ($FLAG)" || echo "sleep: off (touch $FLAG or run: mdeck-sleep on)"
+    [ -f "$FLAG" ] && echo "sleep: off ($FLAG exists; run: mdeck-sleep on)" || echo "sleep: on (touch $FLAG or run: mdeck-sleep off to disable)"
     echo "mem_sleep: $(cat /sys/power/mem_sleep)"
     echo "wake RTC: $(rtc)"
     for w in /sys/class/wakeup/wakeup*; do echo "wake source $(cat "$w/name"): woke $(cat "$w/active_count") times"; done
     ;;
-  on)  touch "$FLAG" && sync && apply && echo "sleep is on: the power button's short press sleeps, a long press powers off" ;;
-  off) rm -f "$FLAG" && sync && apply && echo "sleep is off" ;;
+  on)  rm -f "$FLAG" && sync && apply && echo "sleep is on: the power button's short press sleeps, a long press powers off" ;;
+  off) touch "$FLAG" && sync && apply && echo "sleep is off" ;;
   test)
     secs=${2:-60}
-    [ -f "$FLAG" ] || { echo "sleep is off: run 'mdeck-sleep on' first"; exit 1; }
+    [ -f "$FLAG" ] && { echo "sleep is off: run 'mdeck-sleep on' first"; exit 1; }
     r=$(rtc); [ -n "$r" ] || { echo "no SoC RTC found"; exit 1; }
     rtc_before=$(count 7000000.rtc); pek_before=$(count axp20x-pek)
     echo 0 > "$r/wakealarm"; echo "+$secs" > "$r/wakealarm"

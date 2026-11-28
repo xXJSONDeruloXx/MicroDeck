@@ -228,8 +228,8 @@ trixie userspace. No gaming stack, but several transferable parts:
       its clock starts at 1972 and an absolute alarm time then never fires, so use a relative alarm (`echo +30 > /sys/class/rtc/rtc1/wakealarm`).
       Measured with the full stack: `systemctl suspend` with Steam running and with a game in front (Geometry Wars) slept 35-40 s and
       resumed: panel re-initialised, USB network back, Steam UI and virtual pad back, the game still focused, audio sink present. The
-      resume came from the RTC alarm each time. Shipped OFF by default (v0.7.1+): an empty file `sleep` on the boot partition (or
-      `mdeck-sleep on`) turns it on (`/run/systemd/sleep.conf.d/50-mdeck.conf`: AllowSuspend=yes, freeze; logind: short power press suspends, long
+      resume came from the RTC alarm each time. Shipped OFF by default through v0.9.0 and ON by default after it (2026-11-27: woke from RTC and from the power button on the RG40XX-H; an empty file `nosleep` on the boot partition, or
+      `mdeck-sleep off`, turns it off; it was an empty file `sleep` that turned it on) (`/run/systemd/sleep.conf.d/50-mdeck.conf`: AllowSuspend=yes, freeze; logind: short power press suspends, long
       press powers off; a 3 s power-key hold-off after resume so the waking press does not sleep it again). `mdeck-sleep test [secs]` sleeps
       through the real path with an RTC fallback and prints what woke it (`power-button` or `rtc`). ROOT CAUSE FOUND (2026-11-27 08:00, see the OPEN PROBLEM below for how it showed): s2idle keeps the monotonic clock running, so a
       sleep longer than a service's 3-minute `WatchdogSec` makes systemd kill that service the instant the handheld wakes (the journal shows

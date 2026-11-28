@@ -48,8 +48,8 @@ Installed v0.7.x updaters cannot see v0.8.0 or later (the project moved): write 
 - **Desktop mode:** in Steam, Power > Switch to Desktop gives a small desktop with Firefox, AbiWord, Gnumeric, a text editor, files and a
   terminal, all driven from the pad (the d-pad or sticks move the pointer, A and B click, Start opens the menu, X opens an on-screen
   keyboard). The Steam button on the panel, or holding Start, returns to Steam. One browser tab at a time fits in 1 GB.
-- **Sleep** is off by default. It works, but waking with the power button is not confirmed on every unit. Turn it on with an empty
-  file named `sleep` on the `MICRODECK` partition (or `mdeck-sleep on`).
+- **Sleep** is on: a short press of the power button sleeps, a long press powers off, and the next press wakes. If a unit does not wake from
+  it, hold the power button 10-15 seconds, then turn sleep off with an empty file named `nosleep` on the `MICRODECK` partition (or `mdeck-sleep off`).
 - **Slow:** Direct3D 9 runs on the GPU, Direct3D 10/11 on the CPU. See [docs/games.md](docs/games.md) for what runs.
 
 ## More
